@@ -35,9 +35,9 @@ def make_discrete_vdf(pls_par,mag_par,pres=0.5,qres=0.5,clip=4.):
     
     
     #distribution of velocities in the parallel direction
-    p = np.arange(-wpar*msig,(wpar*msig)+pres,pres)
+    p = np.arange(-wpar*clip,(wpar*clip)+pres,pres)
     #distribution of velocities in the perpendicular direction
-    q = np.arange(0,(wper*msig)+qres,qres)
+    q = np.arange(0,(wper*clip)+qres,qres)
     
     
     #created 2D grid of velocities in the X and y direction
@@ -54,11 +54,14 @@ def make_discrete_vdf(pls_par,mag_par,pres=0.5,qres=0.5,clip=4.):
 
 
 def plot_vdf(dis_vdf):
-    from matplotlib.pyplot import pcolormesh
+    import matplotlib.pyplot as plt
 
     fig, ax = plt.subplots()
 
     ax.pcolormesh(dis_vdf['pgrid'],dis_vdf['qgrid'],np.log10(dis_vdf['vdf']))
+
+    ax.set_xlabel(r'V$\parallel$',fontsize=22)
+    ax.set_ylabel(r'V$\perp$',fontsize=22)
 
     return fig,ax
 
