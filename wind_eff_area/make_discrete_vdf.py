@@ -1,4 +1,7 @@
 import numpy as np
+from scipy.integrate import tplquad
+from functools import partial
+
 
 def make_discrete_vdf(pls_par,mag_par,pres=0.5,qres=0.5,clip=4.):
     """
@@ -24,6 +27,13 @@ def make_discrete_vdf(pls_par,mag_par,pres=0.5,qres=0.5,clip=4.):
 
     clip: float, optional
         The measurement width beyond input velocity width as a sigma value (Default = 4). 
+
+    Returns:
+    ---------
+    dis_vdf: dictionary
+        Dictionary containing a discrete VDF function ['vdf'], the propogating direction grid ['pgrid'],
+        the perpendicular to the propogating direction grid ['qgrid'], velocity vector in gse ['u_gse'],
+        and the normal magnetic field vector ['b_gse'].   
     """
 
     #Set up names for easy call
@@ -49,11 +59,121 @@ def make_discrete_vdf(pls_par,mag_par,pres=0.5,qres=0.5,clip=4.):
     #compute the raw vdf
     rawvdf = a*np.exp(- (pgrid/wpar)**2. - (qgrid/wper)**2.)
     
+    #create dictionary
     dis_vdf = {'vdf':rawvdf,'pgrid':pgrid,'qgrid':qgrid,'u_gse':u_gse,'b_gse':mag_par}
     return dis_vdf
 
 
+def convert_gse_fc(gse_cor,phi_ang,theta_ang):
+    """
+    Convert GSE coordinates to faraday cup coordinates
+
+    Parameters
+    ----------
+    gse_cor: np.array
+        X,Y, and X GSE coordinates to convert to  faraday cup coordiantes
+    
+    phi_ang: float or np.array
+        Phi angle between GSE and FC (radians)
+
+    theta_ang: float or np.array
+        Phi angle between GSE and FC (radians)
+    
+    Returns
+    ---------
+    p_grid: np.array
+        Array of coordinates converted into from X, Y, Z GSE to faraday cup X, Y, Z
+    """
+
+
+    #Xvalues in fc coordinates
+    p_grid_x    = gse_cor[0]*np.sin(phi_ang) + gse_cor[1]*np.cos(phi_ang) # XFC component of B
+
+    #Yvalues in fc cooridnates
+    p_grid_y    =-(gse_cor[0]*np.cos(phi_ang)*np.sin(theta_ang) +        # YFC component of B
+                  gse_cor[1]*np.sin(phi_ang)*np.sin(theta_ang) + 
+                  gse_cor[2]*np.cos(theta_ang))
+
+    #Zvalues in fc cooridnates
+    p_grid_z    = (gse_cor[0]*np.cos(phi_ang)*np.cos(theta_ang) -  # ZFC component of B
+                  gse_cor[1]*np.sin(phi_ang)*np.cos(theta_ang) + 
+                  gse_cor[2]*np.sin(theta_ang))
+
+
+    #output in rows of X, Y , Z
+    p_grid = np.hstack([p_grid_x,p_grid_y,p_grid_z])
+
+
+    return p_grid
+
+def make_fc_meas(dis_vdf,fc_spd=np.arange(300,600,15),fc_phi=-15.,fc_theta=-15):
+    """
+    Creates measurement parameters for a given faraday cup
+
+    Parameters
+    ----------
+    dis_vdf: dictionary
+        A dictionary returned from make_discrete_vdf
+    
+    fc_spd: np.array, optional
+        A 1D numpy array containing speed bins for the faraday cup 
+        (Default = np.arange(300,600,15)). 
+
+    fc_phi: float, optional
+        The Phi angle between the faraday cup center and GSE (Default = -15)
+
+    fc_theat: float, optional
+        The Phi angle between the faraday cup center and GSE (Default = 15)
+
+    Returns
+    --------
+    x_meas: np.array
+               x[0,:]          v_window  [km/s] 
+               x[1,:]          v_delta   [km/s] 
+               x[2,:]          phi_ang [rad] 
+               x[3,:]          theta_ang [rad] 
+               x[4,:]      b in FC "x"
+               x[5,:]      b in FC "y"
+               x[6,:]      b in FC "z" normal to cup
+    """
+
+    #Create array to populate with measurement geometry and range
+    x_meas = np.zeros(7,fc_spd.shape[0])
+
+    #get the gse values of the magnetic field
+    b_gse = dis_vdf['b_gse']
+
+    #Populate measesurement values
+    x_meas[0,:] = fc_spd #speed bins
+    x_meas[1,:] = np.concatenate([np.diff(fc_spd),[fc_spd[-1]-fc_spd[-2]]]) #speed bin sizes
+    x_meas[2,:] = np.radians(fc_phi+np.zeros(fc_spd.shape[0]))
+    x_meas[3,:] = np.radians(fc_theta+np.zeros(fc_spd.shape[0]))
+
+
+    #get transformed coordinates from GSE to FC
+    out_xyz = convert_gse_fc(b_gse,x_meas[2,:],x_meas[3,:])
+
+
+    #populate out_xyz into x_meas
+    x_meas[4,:] = out_xyz[0,:]
+    x_meas[5,:] = out_xyz[1,:]
+    x_meas[6,:] = out_xyz[2,:]
+
+    return x_meas
+
 def plot_vdf(dis_vdf):
+    """
+    Plots VDF in dictionary dis_vdf
+
+    Parameters
+    ----------
+    dis_vdf: dictionary
+         A dictionary returned from make_discrete_vdf
+
+    Returns
+    ---------
+        fig, ax objects
+    """
     import matplotlib.pyplot as plt
 
     fig, ax = plt.subplots(figsize=(8,6))
@@ -68,27 +188,64 @@ def plot_vdf(dis_vdf):
     return fig,ax
 
 
-def arb_p_response(x_meas,dis_vdf,f_p_curr,pts=10):
+def arb_p_response(x_meas,dis_vdf,pts=10):
     """
+    Parameters
+    -----------
     x_meas: np.array
          expect x_meas array in the same format as the wind code
-               x[*,0]          v_window  [km/s] 
-               x[*,1]          v_delta   [km/s] 
-               x[*,2]          phi_ang [rad] 
-               x[*,3]          theta_ang [rad] 
-               x[*,4]      b in FC "x"
-               x[*,5]      b in FC "y"
-               x[*,6]      b in FC "z" normal to cup
+               x[0,:]          v_window  [km/s] 
+               x[1,:]          v_delta   [km/s] 
+               x[2,:]          phi_ang [rad] 
+               x[3,:]          theta_ang [rad] 
+               x[4,:]      b in FC "x"
+               x[5,:]      b in FC "y"
+               x[6,:]      b in FC "z" normal to cup
         
     dis_vdf: dictionary
          A dictionary returned from make_discrete_vdf
 
+
+    Returns:
+    --------
+    dis_cur: np.array
+        Discrete values of the measured current in the FC at x[0,:] velocity windows
+    
     """
 
-    return
+    #number of spectral observations in cup
+    nmeas = x_meas.shape[1]
+
+    #simulated measured current
+    f_p_curr = np.zeros(nmeas)
+
+    #set state of the faraday cup
+    fc_state_vlo = x_meas[0,:]-.5*x_meas[1,:] 
+    fc_state_vhi = x_meas[0,:]+.5*x_meas[1,:] 
+    fc_state_phi = x_meas[2,:]
+    fc_state_tht = x_meas[3,:]
+    
+
+    #get faraday cup measurement at each FC measurement velocity
+    dis_cur = []
+    for i in range( x_meas[0,:].size):
+        
+        #get parameters for each faraday cup value
+        fc_vlo    = fc_state_vlo[i]
+        fc_vhi    = fc_state_vhi[i]
+        phi_ang   = fc_state_phi[i]
+        theta_ang = fc_state_tht[i]
+
+        inp = np.array([fc_vlo,fc_vhi,phi_ang,theta_ang])
+
+        dis_cur.append(fc_meas(dis_vdf,inp,pts=pts))
+
+    dis_cur = np.array(dis_cur)
+
+    return dis_cur
 
 
-def fc_meas(vdf,fc,pts=10):
+def fc_meas(vdf,fc,pts=10,fov_angle=45.,sc ='wind'):
     """
     Get the spacecraft measurement of the VDF
 
@@ -97,31 +254,66 @@ def fc_meas(vdf,fc,pts=10):
     vdf: dictionary
         A dictionary returned from make_discrete_vdf.
    
-    fc: dictionary
-        A dictionary containing properties of the faraday cup
+    fc: np.array
+        A numpy containing properties of the faraday cup in lo, hi, phi, theta
 
     pts: integer, optional
         Number of points to calculate the for integrated solution.
+
+    sc: string, optional
+        Spacecraft effective area to use (Default = 'wind')
+
+    Return:
+    ---------
+    meas: float or np.array
+        Measured current in FC
     """
 
 
-    #Euler angles NEED varification still
-    alpha = fc['pc']
-    beta = fc['tc']
-    gamma = 0.0
-     
+    #break up faraday cup parameters
+    fc_vlo    = fc[0]
+    fc_vhi    = fc[1]
+    phi_ang   = fc[2]
+    theta_ang = fc[3]
+
+    #"Measured" Vx,Vy, and Vz values in FC
+    hold_ufc = convert_gse_fc(vdf['u_gse'],phi_ang,theta_ang)
+    #"Measured" Bx,By, and Bz values in FC
+    hold_bfc = convert_gse_fc(vdf['b_gse'],phi_ang,theta_ang)
+    #"Measured" VDF
+    hold_vdf = vdf['vdf']
+ 
+    #get p and p grids
+    hold_pgrid = vdf['pgrid']
+    hold_qgrid = vdf['qgrid']
 
 
-    return
+    #create vx limits
+    vx_lim = lambda vz: vz*np.tan(np.radians(fov_ang))
+    #create vy limits
+    vy_lim = lambda vz,vx: np.sqrt((vz*np.tan(np.radians(fov_ang)))**2- vx**2)
 
 
-def int_3d(vz,vx,vy,spacecraft='wind'): 
+    #create function with input parameters for int_3d
+    int_3d_inp = partial(int_3d,spacecraft=sc,ufc=hold_ufc,bfc=hold_bfc,qgrid=hold_qgrid,pgrid=hold_pgrid,vdf=hold_vdf)
+        
+    meas = tplquad(int_3d_inp, fc_vlo, fc_vhi, -vx_lim, vx_lim, -vy_lim, vy_lim, epsabs=1.49e-08, epsrel=1.49e-08)
+
+    return meas
+
+
+def int_3d(vz,vx,vy,spacecraft='wind',ufc=[1],bfc=[1],qgrid=[1],pgrid=[1],vdf=[1]): 
     """
     3D function to integrate. Vz is defined to be normal to the cup sensor
     """
     e =  1.60217646e-19   # coulombs
 
-    return e*(vz)*eff_area(vz,vx,vy,spacecraft=spacecraft)*vdf(-vz,vx,vy)
+    eff_area_inp = partial(eff_area,spacecraft=spacecraft)
+    vdf_inp = partial(vdf,hold_bfc=bfc,hold_ufc=ufc,
+                      hold_qgrid=qgrid,hold_pgrid=pgrid,
+                      hold_vdf=vdf)
+
+    return e*(vz)*eff_area_inp(vz,vx,vy)*vdf_inp(-vz,vx,vy)
 
 
 def eff_area(vz,vx,vy,spacecraft='wind'):
@@ -129,13 +321,69 @@ def eff_area(vz,vx,vy,spacecraft='wind'):
     Calculates effective area
     """
 
-    alpha = np.degrees(np.atan2(sqrt(vy^2 + vx^2), vz))
+    #get angle onto the cup
+    alpha = np.degrees(np.atan(sqrt(vy**2 + vx**2), vz))
 
     #Get effective area for give spacecraft
     eff_area = return_space_craft_ef(spacecraft)
 
-    return eff_area[ ((alpha*10) < 909) > 0 ]
+    #Get compute effective area at closest value 
+    return eff_area[ (alpha*10.).astype('int') ]
 
+
+
+# for a VDF that is defined on a grid, get an interpolate
+# at any desired location in phase space
+#
+def vdf(vz,vx,vy,hold_bfc=[1,1,1],hold_ufc=[1,1,1],hold_qgrid=[1],hold_pgrid=[1],hold_vdf=[1]):
+    """
+    Calculates measured VDF
+    """
+#COMMON measurement_params, hold_vdf, hold_pgrid, hold_qgrid, hold_ufc, hold_bfc
+
+    #break up velocity and magnetic field components
+    bx = hold_bfc[0]
+    by = hold_bfc[1]
+    bz = hold_bfc[2]
+    ux = hold_ufc[0]
+    uy = hold_ufc[1] 
+    uz = hold_ufc[2]
+
+    #Get measured p and q values
+    p = (vx-ux)*bx + (vy-uy)*by + (vz-uz)*bz
+    q = sqrt( (vx-ux)^2 + (vy-uy)^2 + (vz-uz)^2 - p^2)
+    
+    #get range of pgrid and qgrid values
+    pr = hold_pgrid[:, 0]
+    qr = hold_qgrid[0,:]
+
+    plocs = interpol(dindgen(n_elements(pr)), pr, p)
+    qlocs = interpol(dindgen(n_elements(qr)), qr, q)
+    rawvdf = hold_vdf
+    # could involve a smoothing step somewhere to make interpolation 
+    # easier without slowing the actual interpolate step
+    vals = interpolate(rawvdf, plocs, qlocs)
+    return vals
+
+# This function is used by INT_3D to set limits of integration 
+# on the transverse velocity. 
+# Right now using 45 degree max FOV. The effective area function 
+# is nonzero out to 62 degrees, so this is not a good choice.
+####def vx_limits(vz,fov_ang=45.):
+####   v_lo = -vz*np.tan(np.radians(fov_ang))
+####   v_hi =  vz*np.tan(np.radians(fov_ang))
+####   return [v_lo<v_hi, v_hi>v_lo]
+####
+##### This function sets limits of integration for the other transverse component.
+##### Again, it is presently limitted to 45 degrees, which isn't great
+####def vy_limits( vz, vx,fov_ang=45.)
+####    vperp = vz*np.tan(np.radians(fov_ang))
+####    v_lo = (-np.sqrt(vperp**2 - vx**2))
+####    v_hi = np.sqrt(vperp**2 - vx**2)
+####    return [v_lo<v_hi, v_hi>v_lo]
+####
+####
+####
 
 def return_space_craft_ef(spacecraft):
     """
