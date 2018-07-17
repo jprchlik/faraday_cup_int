@@ -101,7 +101,7 @@ def convert_gse_fc(gse_cor,phi_ang,theta_ang):
 
 
     #output in rows of X, Y , Z
-    p_grid = np.hstack([p_grid_x,p_grid_y,p_grid_z])
+    p_grid = np.vstack([p_grid_x,p_grid_y,p_grid_z])
 
 
     return p_grid
@@ -138,7 +138,7 @@ def make_fc_meas(dis_vdf,fc_spd=np.arange(300,600,15),fc_phi=-15.,fc_theta=-15):
     """
 
     #Create array to populate with measurement geometry and range
-    x_meas = np.zeros(7,fc_spd.shape[0])
+    x_meas = np.zeros((7,fc_spd.shape[0]))
 
     #get the gse values of the magnetic field
     b_gse = dis_vdf['b_gse']
@@ -153,6 +153,8 @@ def make_fc_meas(dis_vdf,fc_spd=np.arange(300,600,15),fc_phi=-15.,fc_theta=-15):
     #get transformed coordinates from GSE to FC
     out_xyz = convert_gse_fc(b_gse,x_meas[2,:],x_meas[3,:])
 
+    print(out_xyz)
+    print(out_xyz.shape)
 
     #populate out_xyz into x_meas
     x_meas[4,:] = out_xyz[0,:]
@@ -238,14 +240,16 @@ def arb_p_response(x_meas,dis_vdf,pts=10):
 
         inp = np.array([fc_vlo,fc_vhi,phi_ang,theta_ang])
 
-        dis_cur.append(fc_meas(dis_vdf,inp,pts=pts))
+        out = fc_meas(dis_vdf,inp,pts=pts)
+        print(out)
+        dis_cur.append(out)
 
     dis_cur = np.array(dis_cur)
 
     return dis_cur
 
 
-def fc_meas(vdf,fc,pts=10,fov_angle=45.,sc ='wind'):
+def fc_meas(vdf,fc,pts=10,fov_ang=45.,sc ='wind'):
     """
     Get the spacecraft measurement of the VDF
 
@@ -289,15 +293,17 @@ def fc_meas(vdf,fc,pts=10,fov_angle=45.,sc ='wind'):
 
 
     #create vx limits
-    vx_lim = lambda vz: vz*np.tan(np.radians(fov_ang))
+    vx_lim_min = lambda vz: -vz*np.tan(np.radians(fov_ang))
+    vx_lim_max = lambda vz: vz*np.tan(np.radians(fov_ang))
     #create vy limits
-    vy_lim = lambda vz,vx: np.sqrt((vz*np.tan(np.radians(fov_ang)))**2- vx**2)
+    vy_lim_min = lambda vz,vx: -np.sqrt((vz*np.tan(np.radians(fov_ang)))**2- vx**2)
+    vy_lim_max = lambda vz,vx: np.sqrt((vz*np.tan(np.radians(fov_ang)))**2- vx**2)
 
 
     #create function with input parameters for int_3d
     int_3d_inp = partial(int_3d,spacecraft=sc,ufc=hold_ufc,bfc=hold_bfc,qgrid=hold_qgrid,pgrid=hold_pgrid,vdf=hold_vdf)
         
-    meas = tplquad(int_3d_inp, fc_vlo, fc_vhi, -vx_lim, vx_lim, -vy_lim, vy_lim, epsabs=1.49e-08, epsrel=1.49e-08)
+    meas = tplquad(int_3d_inp, fc_vlo, fc_vhi, vx_lim_min, vx_lim_max, vy_lim_min, vy_lim_max, epsabs=1.49e-08, epsrel=1.49e-08)
 
     return meas
 
