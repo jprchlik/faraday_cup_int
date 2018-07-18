@@ -329,7 +329,7 @@ def eff_area(vz,vx,vy,spacecraft='wind'):
     """
 
     #get angle onto the cup
-    alpha = np.degrees(np.arctan(sqrt(vy**2 + vx**2), vz))
+    alpha = np.degrees(np.arctan(np.sqrt(vy**2 + vx**2), vz))
 
     #Get effective area for give spacecraft
     eff_area = return_space_craft_ef(spacecraft)
@@ -358,7 +358,7 @@ def vdf_calc(vz,vx,vy,hold_bfc=[1,1,1],hold_ufc=[1,1,1],hold_qgrid=[1],hold_pgri
 
     #Get measured p and q values
     p = (vx-ux)*bx + (vy-uy)*by + (vz-uz)*bz
-    q = sqrt( (vx-ux)^2 + (vy-uy)^2 + (vz-uz)^2 - p^2)
+    q = np.sqrt( (vx-ux)^2 + (vy-uy)^2 + (vz-uz)^2 - p^2)
     
     #get range of pgrid and qgrid values
     pr = hold_pgrid[:, 0]
