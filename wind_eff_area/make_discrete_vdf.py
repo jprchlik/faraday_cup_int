@@ -1,6 +1,7 @@
 import numpy as np
 from scipy.integrate import tplquad
 from functools import partial
+import scipy.interpolate as interp
 
 
 def make_discrete_vdf(pls_par,mag_par,pres=0.5,qres=0.5,clip=4.):
@@ -293,11 +294,11 @@ def fc_meas(vdf,fc,pts=10,fov_ang=45.,sc ='wind'):
 
 
     #create vx limits
-    vx_lim_min = lambda vz: -vz*np.tan(np.radians(fov_ang))
-    vx_lim_max = lambda vz: vz*np.tan(np.radians(fov_ang))
+    vx_lim_min = lambda vx: -vy*np.tan(np.radians(fov_ang))
+    vx_lim_max = lambda vx: vy*np.tan(np.radians(fov_ang))
     #create vy limits
-    vy_lim_min = lambda vz,vx: -np.sqrt((vz*np.tan(np.radians(fov_ang)))**2- vx**2)
-    vy_lim_max = lambda vz,vx: np.sqrt((vz*np.tan(np.radians(fov_ang)))**2- vx**2)
+    vy_lim_min = lambda vx,vy: -np.sqrt((vx*np.tan(np.radians(fov_ang)))**2- vy**2)
+    vy_lim_max = lambda vx,vy: np.sqrt((vx*np.tan(np.radians(fov_ang)))**2- vy**2)
 
 
     #create function with input parameters for int_3d
@@ -309,7 +310,7 @@ def fc_meas(vdf,fc,pts=10,fov_ang=45.,sc ='wind'):
     return meas
 
 
-def int_3d(vz,vx,vy,spacecraft='wind',ufc=[1],bfc=[1],qgrid=[1],pgrid=[1],vdf=[1]): 
+def int_3d(vx,vy,vz,spacecraft='wind',ufc=[1],bfc=[1],qgrid=[1],pgrid=[1],vdf=[1]): 
     """
     3D function to integrate. Vz is defined to be normal to the cup sensor
     """
@@ -320,16 +321,20 @@ def int_3d(vz,vx,vy,spacecraft='wind',ufc=[1],bfc=[1],qgrid=[1],pgrid=[1],vdf=[1
                       hold_qgrid=qgrid,hold_pgrid=pgrid,
                       hold_vdf=vdf)
 
-    return e*(vz)*eff_area_inp(vz,vx,vy)*vdf_inp(-vz,vx,vy)
+
+    print(eff_area_inp(vx,vy,vz)) 
+    print(vdf_inp(-vx,vy,vz))
+
+    return e*(vz)*eff_area_inp(vx,vy,vz)*vdf_inp(-vx,vy,vz)
 
 
-def eff_area(vz,vx,vy,spacecraft='wind'):
+def eff_area(vx,vy,vz,spacecraft='wind'):
     """
     Calculates effective area
     """
 
     #get angle onto the cup
-    alpha = np.degrees(np.arctan2(np.sqrt(vy**2 + vx**2), vz))
+    alpha = np.degrees(np.arctan2(np.sqrt(vy**2 + vz**2), vx))
 
     #Get effective area for give spacecraft
     eff_area = return_space_craft_ef(spacecraft)
@@ -342,7 +347,7 @@ def eff_area(vz,vx,vy,spacecraft='wind'):
 # for a VDF that is defined on a grid, get an interpolate
 # at any desired location in phase space
 #
-def vdf_calc(vz,vx,vy,hold_bfc=[1,1,1],hold_ufc=[1,1,1],hold_qgrid=[1],hold_pgrid=[1],hold_vdf=[1]):
+def vdf_calc(vx,vy,vz,hold_bfc=[1,1,1],hold_ufc=[1,1,1],hold_qgrid=[1],hold_pgrid=[1],hold_vdf=[1]):
     """
     Calculates measured VDF
     """
@@ -356,20 +361,32 @@ def vdf_calc(vz,vx,vy,hold_bfc=[1,1,1],hold_ufc=[1,1,1],hold_qgrid=[1],hold_pgri
     uy = hold_ufc[1] 
     uz = hold_ufc[2]
 
+    print(ux,vx)
+    print(uy,vy)
+    print(uz,vz)
     #Get measured p and q values
     p = (vx-ux)*bx + (vy-uy)*by + (vz-uz)*bz
     q = np.sqrt( (vx-ux)**2 + (vy-uy)**2 + (vz-uz)**2 - p**2)
     
     #get range of pgrid and qgrid values
-    pr = hold_pgrid[:, 0]
-    qr = hold_qgrid[0,:]
+    #pr = hold_pgrid[:, 0]
+    #qr = hold_qgrid[0,:]
 
-    plocs = np.interp(np.arange(pr)), p, pr)
-    qlocs = np.interp(np.arange(qr)), q, qr)
-    rawvdf = hold_vdf
-    # could involve a smoothing step somewhere to make interpolation 
-    # easier without slowing the actual interpolate step
-    vals = np.interp(rawvdf, plocs, qlocs)
+    #plocs = np.interp(np.arange(pr.size), pr, p)
+    #qlocs = np.interp(np.arange(qr.size), qr, q)
+    #rawvdf = hold_vdf
+    ## could involve a smoothing step somewhere to make interpolation 
+    ## easier without slowing the actual interpolate step
+    #vals = np.interp(rawvdf, plocs, qlocs)
+
+    print(ux)
+    print(p,q)
+    print(hold_pgrid)
+    print(hold_qgrid)
+
+    #vals = interp.griddata( (hold_pgrid.ravel(),hold_qgrid.ravel()),hold_vdf.ravel(), (p,q),method='linear')
+    vals =2
+
     return vals
 
 # This function is used by INT_3D to set limits of integration 
