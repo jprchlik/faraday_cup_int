@@ -329,7 +329,7 @@ def eff_area(vz,vx,vy,spacecraft='wind'):
     """
 
     #get angle onto the cup
-    alpha = np.degrees(np.arctan(np.sqrt(vy**2 + vx**2), vz))
+    alpha = np.degrees(np.arctan2(np.sqrt(vy**2 + vx**2), vz))
 
     #Get effective area for give spacecraft
     eff_area = return_space_craft_ef(spacecraft)
@@ -358,18 +358,18 @@ def vdf_calc(vz,vx,vy,hold_bfc=[1,1,1],hold_ufc=[1,1,1],hold_qgrid=[1],hold_pgri
 
     #Get measured p and q values
     p = (vx-ux)*bx + (vy-uy)*by + (vz-uz)*bz
-    q = np.sqrt( (vx-ux)^2 + (vy-uy)^2 + (vz-uz)^2 - p^2)
+    q = np.sqrt( (vx-ux)**2 + (vy-uy)**2 + (vz-uz)**2 - p**2)
     
     #get range of pgrid and qgrid values
     pr = hold_pgrid[:, 0]
     qr = hold_qgrid[0,:]
 
-    plocs = interpol(dindgen(n_elements(pr)), pr, p)
-    qlocs = interpol(dindgen(n_elements(qr)), qr, q)
+    plocs = np.interp(np.arange(pr)), p, pr)
+    qlocs = np.interp(np.arange(qr)), q, qr)
     rawvdf = hold_vdf
     # could involve a smoothing step somewhere to make interpolation 
     # easier without slowing the actual interpolate step
-    vals = interpolate(rawvdf, plocs, qlocs)
+    vals = np.interp(rawvdf, plocs, qlocs)
     return vals
 
 # This function is used by INT_3D to set limits of integration 
