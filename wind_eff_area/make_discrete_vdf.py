@@ -302,6 +302,7 @@ def fc_meas(vdf,fc,pts=10,fov_ang=45.,sc ='wind'):
 
     #create function with input parameters for int_3d
     int_3d_inp = partial(int_3d,spacecraft=sc,ufc=hold_ufc,bfc=hold_bfc,qgrid=hold_qgrid,pgrid=hold_pgrid,vdf=hold_vdf)
+
         
     meas = tplquad(int_3d_inp, fc_vlo, fc_vhi, vx_lim_min, vx_lim_max, vy_lim_min, vy_lim_max, epsabs=1.49e-08, epsrel=1.49e-08)
 
@@ -315,7 +316,7 @@ def int_3d(vz,vx,vy,spacecraft='wind',ufc=[1],bfc=[1],qgrid=[1],pgrid=[1],vdf=[1
     e =  1.60217646e-19   # coulombs
 
     eff_area_inp = partial(eff_area,spacecraft=spacecraft)
-    vdf_inp = partial(vdf,hold_bfc=bfc,hold_ufc=ufc,
+    vdf_inp = partial(vdf_calc,hold_bfc=bfc,hold_ufc=ufc,
                       hold_qgrid=qgrid,hold_pgrid=pgrid,
                       hold_vdf=vdf)
 
@@ -341,7 +342,7 @@ def eff_area(vz,vx,vy,spacecraft='wind'):
 # for a VDF that is defined on a grid, get an interpolate
 # at any desired location in phase space
 #
-def vdf(vz,vx,vy,hold_bfc=[1,1,1],hold_ufc=[1,1,1],hold_qgrid=[1],hold_pgrid=[1],hold_vdf=[1]):
+def vdf_calc(vz,vx,vy,hold_bfc=[1,1,1],hold_ufc=[1,1,1],hold_qgrid=[1],hold_pgrid=[1],hold_vdf=[1]):
     """
     Calculates measured VDF
     """
