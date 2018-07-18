@@ -329,7 +329,7 @@ def eff_area(vz,vx,vy,spacecraft='wind'):
     """
 
     #get angle onto the cup
-    alpha = np.degrees(np.atan(sqrt(vy**2 + vx**2), vz))
+    alpha = np.degrees(np.arctan(sqrt(vy**2 + vx**2), vz))
 
     #Get effective area for give spacecraft
     eff_area = return_space_craft_ef(spacecraft)
