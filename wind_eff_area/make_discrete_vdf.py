@@ -13,7 +13,7 @@ def make_discrete_vdf(pls_par,mag_par,pres=0.5,qres=0.5,clip=4.):
     pls_par: np.array
         A numpy array of plasma parameters in the following order: Vx,Vy,Vz,Wper,Wpar,Np.
         That is the proton velocity in the solar wind in X GSE, Y GSE, and Z GSE in km/s,
-        followed by the thermal width perpendicular and paralle to the magnetic field normal,
+        followed by the thermal width perpendicular and parallel to the magnetic field normal,
         and finally the proton number density in cm^{-3}
     
     mag_par: np.array
@@ -48,7 +48,7 @@ def make_discrete_vdf(pls_par,mag_par,pres=0.5,qres=0.5,clip=4.):
     #distribution of velocities in the parallel direction
     p = np.arange(-wpar*clip,(wpar*clip)+pres,pres)
     #distribution of velocities in the perpendicular direction
-    q = np.arange(0,(wper*clip)+qres,qres)
+    q = np.arange(-wper*clip,(wper*clip)+qres,qres)
     
     
     #created 2D grid of velocities in the X and y direction
@@ -91,7 +91,7 @@ def convert_gse_fc(gse_cor,phi_ang,theta_ang):
     p_grid_x    = gse_cor[0]*np.sin(phi_ang) + gse_cor[1]*np.cos(phi_ang) # XFC component of B
 
     #Yvalues in fc cooridnates
-    p_grid_y    =-(gse_cor[0]*np.cos(phi_ang)*np.sin(theta_ang) +        # YFC component of B
+    p_grid_y    =(-(gse_cor[0]*np.cos(phi_ang)*np.sin(theta_ang)) +        # YFC component of B
                   gse_cor[1]*np.sin(phi_ang)*np.sin(theta_ang) + 
                   gse_cor[2]*np.cos(theta_ang))
 
@@ -154,8 +154,8 @@ def make_fc_meas(dis_vdf,fc_spd=np.arange(300,600,15),fc_phi=-15.,fc_theta=-15):
     #get transformed coordinates from GSE to FC
     out_xyz = convert_gse_fc(b_gse,x_meas[2,:],x_meas[3,:])
 
-    print(out_xyz)
-    print(out_xyz.shape)
+    #print(out_xyz)
+    #print(out_xyz.shape)
 
     #populate out_xyz into x_meas
     x_meas[4,:] = out_xyz[0,:]
@@ -242,7 +242,7 @@ def arb_p_response(x_meas,dis_vdf,pts=10):
         inp = np.array([fc_vlo,fc_vhi,phi_ang,theta_ang])
 
         out = fc_meas(dis_vdf,inp,pts=pts)
-        print(out)
+        #print(out)
         dis_cur.append(out)
 
     dis_cur = np.array(dis_cur)
@@ -286,7 +286,7 @@ def fc_meas(vdf,fc,pts=10,fov_ang=45.,sc ='wind'):
     #"Measured" Bx,By, and Bz values in FC
     hold_bfc = convert_gse_fc(vdf['b_gse'],phi_ang,theta_ang)
     #"Measured" VDF
-    hold_vdf = vdf['vdf']
+    hold_vdf = 1.e12*vdf['vdf']
  
     #get p and p grids
     hold_pgrid = vdf['pgrid']
@@ -294,41 +294,57 @@ def fc_meas(vdf,fc,pts=10,fov_ang=45.,sc ='wind'):
 
 
     #create vx limits
-    vx_lim_min = lambda vx: -vy*np.tan(np.radians(fov_ang))
-    vx_lim_max = lambda vx: vy*np.tan(np.radians(fov_ang))
+    vx_lim_min = lambda vz: -vz*np.tan(np.radians(fov_ang))
+    vx_lim_max = lambda vz: vz*np.tan(np.radians(fov_ang))
     #create vy limits
-    vy_lim_min = lambda vx,vy: -np.sqrt((vx*np.tan(np.radians(fov_ang)))**2- vy**2)
-    vy_lim_max = lambda vx,vy: np.sqrt((vx*np.tan(np.radians(fov_ang)))**2- vy**2)
+    vy_lim_min = lambda vz,vx: -np.sqrt((vz*np.tan(np.radians(fov_ang)))**2- vx**2)
+    vy_lim_max = lambda vz,vx: np.sqrt((vz*np.tan(np.radians(fov_ang)))**2- vx**2)
 
 
     #create function with input parameters for int_3d
     int_3d_inp = partial(int_3d,spacecraft=sc,ufc=hold_ufc,bfc=hold_bfc,qgrid=hold_qgrid,pgrid=hold_pgrid,vdf=hold_vdf)
 
         
+    fc_xlo,fc_xhi = vx_lim_min(fc_vlo),vx_lim_max(fc_vhi)
+    fc_ylo,fc_yhi = vy_lim_min(fc_vlo,0),vy_lim_max(fc_vhi,0)
     meas = tplquad(int_3d_inp, fc_vlo, fc_vhi, vx_lim_min, vx_lim_max, vy_lim_min, vy_lim_max, epsabs=1.49e-08, epsrel=1.49e-08)
 
     return meas
 
 
-def int_3d(vx,vy,vz,spacecraft='wind',ufc=[1],bfc=[1],qgrid=[1],pgrid=[1],vdf=[1]): 
+def int_3d(vz,vx,vy,spacecraft='wind',ufc=[1],bfc=[1],qgrid=[1],pgrid=[1],vdf=[1]): 
     """
     3D function to integrate. Vz is defined to be normal to the cup sensor
     """
     e =  1.60217646e-19   # coulombs
 
+    #print(vx,vy,vz)
+    #print(ufc)
     eff_area_inp = partial(eff_area,spacecraft=spacecraft)
     vdf_inp = partial(vdf_calc,hold_bfc=bfc,hold_ufc=ufc,
                       hold_qgrid=qgrid,hold_pgrid=pgrid,
                       hold_vdf=vdf)
 
 
-    print(eff_area_inp(vx,vy,vz)) 
-    print(vdf_inp(-vx,vy,vz))
+    test_area = eff_area_inp(vz,vx,vy)
+    test_vdf  =  vdf_inp(vz,vx,vy)
 
-    return e*(vz)*eff_area_inp(vx,vy,vz)*vdf_inp(-vx,vy,vz)
+    if ((test_area > 0) | (test_vdf >0 )) :
+        ####print('############')
+        ####print('EFF AREA')
+        ####print(test_area)
+        ####print("VDF calc")
+        ####print(test_vdf)
+        #####val = e*(vz)*eff_area_inp(vx,vy,vz)*vdf_inp(-vx,vy,vz)
+        val =  e*(vz)*eff_area_inp(vz,vx,vy)*vdf_inp(vz,vx,vy)
+        ####print(vx,vy,vz,val)
+    else: 
+        val = 0
+
+    return val
 
 
-def eff_area(vx,vy,vz,spacecraft='wind'):
+def eff_area(vz,vx,vy,spacecraft='wind'):
     """
     Calculates effective area
     """
@@ -338,20 +354,34 @@ def eff_area(vx,vy,vz,spacecraft='wind'):
 
     #Get effective area for give spacecraft
     eff_area = return_space_craft_ef(spacecraft)
+    
+    #alpha as an index for wind
+    i_alpha = (alpha*10.) #.astype('int')
+
+    #get interpolated effective area and fill out of range values with 0
+    calc_eff_area = np.interp(i_alpha,np.arange(eff_area.size),eff_area,left=0,right=0)
 
     #Get compute effective area at closest value 
-    return eff_area[ (alpha*10.).astype('int') ]
+    return calc_eff_area
 
 
 
 # for a VDF that is defined on a grid, get an interpolate
 # at any desired location in phase space
 #
-def vdf_calc(vx,vy,vz,hold_bfc=[1,1,1],hold_ufc=[1,1,1],hold_qgrid=[1],hold_pgrid=[1],hold_vdf=[1]):
+def vdf_calc(vz,vx,vy,hold_bfc=[1,1,1],hold_ufc=[1,1,1],hold_qgrid=[1],hold_pgrid=[1],hold_vdf=[1],tol=5):
     """
     Calculates measured VDF
+
+    Parameters
+    ----------
+    tol: float, optional
+        Tolerance to include in interpolating p and q values (Default = 5 km/s)
     """
 #COMMON measurement_params, hold_vdf, hold_pgrid, hold_qgrid, hold_ufc, hold_bfc
+
+
+    vz *= -1
 
     #break up velocity and magnetic field components
     bx = hold_bfc[0]
@@ -361,32 +391,47 @@ def vdf_calc(vx,vy,vz,hold_bfc=[1,1,1],hold_ufc=[1,1,1],hold_qgrid=[1],hold_pgri
     uy = hold_ufc[1] 
     uz = hold_ufc[2]
 
-    print(ux,vx)
-    print(uy,vy)
-    print(uz,vz)
+    #print('INPUT VX')
+    #print(vx)
+    #print('##################')
     #Get measured p and q values
+    #print('XXXXXXXXXXXXXXXXXXXXXXX')
+    #print(hold_ufc)
+    #print((vx-ux),(vy-uy),(vz-uz))
     p = (vx-ux)*bx + (vy-uy)*by + (vz-uz)*bz
     q = np.sqrt( (vx-ux)**2 + (vy-uy)**2 + (vz-uz)**2 - p**2)
+
+    #print('XXXXXXXXXXXXXXXXXXXXXXX')
+    #print('NEW')
+    #print(vx,vy,vz)
+    #print(ux,uy,uz)
+    #print(hold_pgrid.min(),hold_qgrid.min())
+    #print(p,q)
+    #print(hold_pgrid.max(),hold_qgrid.max())
+    #print('XXXXXXXXXXXXXXXXXXXXXXX')
     
-    #get range of pgrid and qgrid values
-    #pr = hold_pgrid[:, 0]
-    #qr = hold_qgrid[0,:]
+    #select array around p and q to grab from p and q grid to speed up interpolation
+    diff_p = np.abs(p-hold_pgrid)
+    diff_q = np.abs(q-hold_qgrid)
 
-    #plocs = np.interp(np.arange(pr.size), pr, p)
-    #qlocs = np.interp(np.arange(qr.size), qr, q)
-    #rawvdf = hold_vdf
-    ## could involve a smoothing step somewhere to make interpolation 
-    ## easier without slowing the actual interpolate step
-    #vals = np.interp(rawvdf, plocs, qlocs)
+    #get indices where true
+    mind_pq_x,mind_pq_y, = np.where((diff_p < tol) & (diff_q < tol))
 
-    print(ux)
-    print(p,q)
-    print(hold_pgrid)
-    print(hold_qgrid)
 
-    #vals = interp.griddata( (hold_pgrid.ravel(),hold_qgrid.ravel()),hold_vdf.ravel(), (p,q),method='linear')
-    vals =2
+    #print(hold_pgrid.min(),hold_qgrid.min())
+    #print(p,q)
+    #print(hold_pgrid.max(),hold_qgrid.max())
 
+    if mind_pq_x.size == 0:
+        return 0 
+
+    ###print(ux,vx)
+    ###print(hold_vdf[mind_pq_x,mind_pq_y].mean())
+
+    #Interpolate "measured" p,q values from grid
+    vals = interp.griddata( (hold_pgrid[mind_pq_x,mind_pq_y],hold_qgrid[mind_pq_x,mind_pq_y]),hold_vdf[mind_pq_x,mind_pq_y], (p,q),method='linear')
+
+    ###print(vals)
     return vals
 
 # This function is used by INT_3D to set limits of integration 
