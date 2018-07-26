@@ -48,7 +48,7 @@ def make_discrete_vdf(pls_par,mag_par,pres=0.5,qres=0.5,clip=4.):
     #distribution of velocities in the parallel direction
     p = np.arange(-wpar*clip,(wpar*clip)+pres,pres)
     #distribution of velocities in the perpendicular direction
-    q = np.arange(-wper*clip,(wper*clip)+qres,qres)
+    q = np.arange(0,(wper*clip)+qres,qres)
     
     
     #created 2D grid of velocities in the X and y direction
@@ -303,11 +303,9 @@ def fc_meas(vdf,fc,pts=10,fov_ang=45.,sc ='wind'):
 
     #create function with input parameters for int_3d
     int_3d_inp = partial(int_3d,spacecraft=sc,ufc=hold_ufc,bfc=hold_bfc,qgrid=hold_qgrid,pgrid=hold_pgrid,vdf=hold_vdf)
-
         
-    fc_xlo,fc_xhi = vx_lim_min(fc_vlo),vx_lim_max(fc_vhi)
-    fc_ylo,fc_yhi = vy_lim_min(fc_vlo,0),vy_lim_max(fc_vhi,0)
     meas = tplquad(int_3d_inp, fc_vlo, fc_vhi, vx_lim_min, vx_lim_max, vy_lim_min, vy_lim_max, epsabs=1.49e-08, epsrel=1.49e-08)
+    print(meas)
 
     return meas
 
@@ -326,20 +324,24 @@ def int_3d(vz,vx,vy,spacecraft='wind',ufc=[1],bfc=[1],qgrid=[1],pgrid=[1],vdf=[1
                       hold_vdf=vdf)
 
 
+    #Calculate effective area
     test_area = eff_area_inp(vz,vx,vy)
-    test_vdf  =  vdf_inp(vz,vx,vy)
+    if test_area < 1.e-16:
+        return 0
 
-    if ((test_area > 0) | (test_vdf >0 )) :
-        ####print('############')
-        ####print('EFF AREA')
-        ####print(test_area)
-        ####print("VDF calc")
-        ####print(test_vdf)
-        #####val = e*(vz)*eff_area_inp(vx,vy,vz)*vdf_inp(-vx,vy,vz)
-        val =  e*(vz)*eff_area_inp(vz,vx,vy)*vdf_inp(vz,vx,vy)
-        ####print(vx,vy,vz,val)
-    else: 
-        val = 0
+
+    #Get observed VDF
+    test_vdf  =  vdf_inp(vz,vx,vy)
+    if test_vdf < 1.e-16:
+        return 0
+
+    print('############')
+    print('EFF AREA')
+    print(test_area)
+    print("VDF calc")
+    print(test_vdf)
+    #val = e*(vz)*eff_area_inp(vx,vy,vz)*vdf_inp(-vx,vy,vz)
+    val =  e*(vz)*test_area*test_vdf #eff_area_inp(vz,vx,vy)*vdf_inp(vz,vx,vy)
 
     return val
 
@@ -350,7 +352,7 @@ def eff_area(vz,vx,vy,spacecraft='wind'):
     """
 
     #get angle onto the cup
-    alpha = np.degrees(np.arctan2(np.sqrt(vy**2 + vz**2), vx))
+    alpha = np.degrees(np.arctan2(np.sqrt(vy**2 + vx**2), vz))
 
     #Get effective area for give spacecraft
     eff_area = return_space_craft_ef(spacecraft)
@@ -424,6 +426,9 @@ def vdf_calc(vz,vx,vy,hold_bfc=[1,1,1],hold_ufc=[1,1,1],hold_qgrid=[1],hold_pgri
 
     if mind_pq_x.size == 0:
         return 0 
+    #prevent last row errors due to none unique numbers in griddata
+    if ((np.unique(mind_pq_x).size < 2) | (np.unique(mind_pq_y).size < 2)):
+        return 0
 
     ###print(ux,vx)
     ###print(hold_vdf[mind_pq_x,mind_pq_y].mean())
