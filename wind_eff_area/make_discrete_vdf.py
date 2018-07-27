@@ -2,6 +2,7 @@ import numpy as np
 from scipy.integrate import tplquad
 from functools import partial
 import scipy.interpolate as interp
+import monte_carlo_int as mci
 
 
 def make_discrete_vdf(pls_par,mag_par,pres=0.5,qres=0.5,clip=4.):
@@ -107,7 +108,7 @@ def convert_gse_fc(gse_cor,phi_ang,theta_ang):
 
     return p_grid
 
-def make_fc_meas(dis_vdf,fc_spd=np.arange(300,600,15),fc_phi=-15.,fc_theta=-15):
+def make_fc_meas(dis_vdf,fc_spd=np.arange(300,600,15),fc_phi=-15.,fc_theta=-15,samp=10000):
     """
     Creates measurement parameters for a given faraday cup
 
@@ -125,6 +126,9 @@ def make_fc_meas(dis_vdf,fc_spd=np.arange(300,600,15),fc_phi=-15.,fc_theta=-15):
 
     fc_theat: float, optional
         The Phi angle between the faraday cup center and GSE (Default = 15)
+
+    samp: int, optional
+        Number of samples to use when doing the Monte Carlo Integration (Default = 10000)
 
     Returns
     --------
@@ -250,7 +254,7 @@ def arb_p_response(x_meas,dis_vdf,pts=10):
     return dis_cur
 
 
-def fc_meas(vdf,fc,pts=10,fov_ang=45.,sc ='wind'):
+def fc_meas(vdf,fc,pts=10,fov_ang=45.,sc ='wind',samp=10000):
     """
     Get the spacecraft measurement of the VDF
 
@@ -267,6 +271,9 @@ def fc_meas(vdf,fc,pts=10,fov_ang=45.,sc ='wind'):
 
     sc: string, optional
         Spacecraft effective area to use (Default = 'wind')
+  
+    samp: int, optional
+        Number of samples to use when doing the Monte Carlo Integration (Default = 10000)
 
     Return:
     ---------
@@ -286,7 +293,7 @@ def fc_meas(vdf,fc,pts=10,fov_ang=45.,sc ='wind'):
     #"Measured" Bx,By, and Bz values in FC
     hold_bfc = convert_gse_fc(vdf['b_gse'],phi_ang,theta_ang)
     #"Measured" VDF
-    hold_vdf = 1.e12*vdf['vdf']
+    hold_vdf = vdf['vdf']
  
     #get p and p grids
     hold_pgrid = vdf['pgrid']
@@ -302,10 +309,11 @@ def fc_meas(vdf,fc,pts=10,fov_ang=45.,sc ='wind'):
 
 
     #create function with input parameters for int_3d
-    int_3d_inp = partial(int_3d,spacecraft=sc,ufc=hold_ufc,bfc=hold_bfc,qgrid=hold_qgrid,pgrid=hold_pgrid,vdf=hold_vdf)
+    #int_3d_inp = partial(int_3d,spacecraft=sc,ufc=hold_ufc,bfc=hold_bfc,qgrid=hold_qgrid,pgrid=hold_pgrid,vdf=hold_vdf)
+    args = (sc,hold_ufc,hold_bfc,hold_qgrid,hold_pgrid,hold_vdf)
         
-    meas = tplquad(int_3d_inp, fc_vlo, fc_vhi, vx_lim_min, vx_lim_max, vy_lim_min, vy_lim_max, epsabs=1.49e-08, epsrel=1.49e-08)
-    print(meas)
+    #meas = tplquad(int_3d, fc_vlo, fc_vhi, vx_lim_min, vx_lim_max, vy_lim_min, vy_lim_max, epsabs=1.e-4, epsrel=1.e-4,args=args)
+    meas = mci.mc_trip(int_3d, fc_vlo, fc_vhi, vx_lim_min, vx_lim_max, vy_lim_min, vy_lim_max,n=samp,args=args)
 
     return meas
 
@@ -316,33 +324,37 @@ def int_3d(vz,vx,vy,spacecraft='wind',ufc=[1],bfc=[1],qgrid=[1],pgrid=[1],vdf=[1
     """
     e =  1.60217646e-19   # coulombs
 
-    #print(vx,vy,vz)
-    #print(ufc)
-    eff_area_inp = partial(eff_area,spacecraft=spacecraft)
-    vdf_inp = partial(vdf_calc,hold_bfc=bfc,hold_ufc=ufc,
-                      hold_qgrid=qgrid,hold_pgrid=pgrid,
-                      hold_vdf=vdf)
-
+##3    eff_area_inp = partial(eff_area,spacecraft=spacecraft)
+##3    vdf_inp = partial(vdf_calc,hold_bfc=bfc,hold_ufc=ufc,
+##3                      hold_qgrid=qgrid,hold_pgrid=pgrid,
+##3                      hold_vdf=vdf)
+##3
 
     #Calculate effective area
-    test_area = eff_area_inp(vz,vx,vy)
-    if test_area < 1.e-16:
-        return 0
+    test_area = eff_area(vz,vx,vy,spacecraft=spacecraft)
+    #if ((test_area < 1.e-16) | (not np.isfinite(test_area))):
+    #    return 0
 
 
     #Get observed VDF
-    test_vdf  =  vdf_inp(vz,vx,vy)
-    if test_vdf < 1.e-16:
-        return 0
+    test_vdf  =  vdf_calc(vz,vx,vy,hold_bfc=bfc,hold_ufc=ufc,
+                      hold_qgrid=qgrid,hold_pgrid=pgrid,
+                      hold_vdf=vdf)
+    #if ((test_vdf < 1.e-16) | (not np.isfinite(test_vdf))):
+    #    return 0
 
-    print('############')
-    print('EFF AREA')
-    print(test_area)
-    print("VDF calc")
-    print(test_vdf)
+    #print('############')
+    #print('EFF AREA')
+    #print(test_area)
+    #print("VDF calc")
+    #print(test_vdf)
     #val = e*(vz)*eff_area_inp(vx,vy,vz)*vdf_inp(-vx,vy,vz)
-    val =  e*(vz)*test_area*test_vdf #eff_area_inp(vz,vx,vy)*vdf_inp(vz,vx,vy)
+    #print(vz)
+    val =  (vz)*test_area*test_vdf #eff_area_inp(vz,vx,vy)*vdf_inp(vz,vx,vy)
 
+    #remove nan values
+    val = val[np.isfinite(val)]
+    #print(val)
     return val
 
 
@@ -413,28 +425,30 @@ def vdf_calc(vz,vx,vy,hold_bfc=[1,1,1],hold_ufc=[1,1,1],hold_qgrid=[1],hold_pgri
     #print('XXXXXXXXXXXXXXXXXXXXXXX')
     
     #select array around p and q to grab from p and q grid to speed up interpolation
-    diff_p = np.abs(p-hold_pgrid)
-    diff_q = np.abs(q-hold_qgrid)
+    #Switch to passing array in MC integrator
+    ####diff_p = np.abs(p-hold_pgrid)
+    ####diff_q = np.abs(q-hold_qgrid)
 
     #get indices where true
-    mind_pq_x,mind_pq_y, = np.where((diff_p < tol) & (diff_q < tol))
+    ####mind_pq_x,mind_pq_y, = np.where((diff_p < tol) & (diff_q < tol))
 
 
-    #print(hold_pgrid.min(),hold_qgrid.min())
-    #print(p,q)
-    #print(hold_pgrid.max(),hold_qgrid.max())
+    #####print(hold_pgrid.min(),hold_qgrid.min())
+    #####print(p,q)
+    #####print(hold_pgrid.max(),hold_qgrid.max())
 
-    if mind_pq_x.size == 0:
-        return 0 
-    #prevent last row errors due to none unique numbers in griddata
-    if ((np.unique(mind_pq_x).size < 2) | (np.unique(mind_pq_y).size < 2)):
-        return 0
+    ####if mind_pq_x.size == 0:
+    ####    return 0 
+    #####prevent last row errors due to none unique numbers in griddata
+    ####if ((np.unique(mind_pq_x).size < 2) | (np.unique(mind_pq_y).size < 2)):
+    ####    return 0
 
     ###print(ux,vx)
     ###print(hold_vdf[mind_pq_x,mind_pq_y].mean())
 
     #Interpolate "measured" p,q values from grid
-    vals = interp.griddata( (hold_pgrid[mind_pq_x,mind_pq_y],hold_qgrid[mind_pq_x,mind_pq_y]),hold_vdf[mind_pq_x,mind_pq_y], (p,q),method='linear')
+    ####vals = interp.griddata( (hold_pgrid[mind_pq_x,mind_pq_y],hold_qgrid[mind_pq_x,mind_pq_y]),hold_vdf[mind_pq_x,mind_pq_y], (p,q),method='linear')
+    vals = interp.griddata( (hold_pgrid.ravel(),hold_qgrid.ravel()),hold_vdf.ravel(), (p.ravel(),q.ravel()),method='linear')
 
     ###print(vals)
     return vals
