@@ -2,7 +2,9 @@ import numpy as np
 from scipy.integrate import tplquad
 from functools import partial
 import scipy.interpolate as interp
+from scipy.special import erf
 import monte_carlo_int as mci
+import sympy
 
 
 def make_discrete_vdf(pls_par,mag_par,pres=0.5,qres=0.5,clip=4.):
@@ -108,7 +110,7 @@ def convert_gse_fc(gse_cor,phi_ang,theta_ang):
 
     return p_grid
 
-def make_fc_meas(dis_vdf,fc_spd=np.arange(300,600,15),fc_phi=-15.,fc_theta=-15,samp=10000):
+def make_fc_meas(dis_vdf,fc_spd=np.arange(300,600,15),fc_phi=-15.,fc_theta=-15):
     """
     Creates measurement parameters for a given faraday cup
 
@@ -124,11 +126,8 @@ def make_fc_meas(dis_vdf,fc_spd=np.arange(300,600,15),fc_phi=-15.,fc_theta=-15,s
     fc_phi: float, optional
         The Phi angle between the faraday cup center and GSE (Default = -15)
 
-    fc_theat: float, optional
+    fc_theta: float, optional
         The Phi angle between the faraday cup center and GSE (Default = 15)
-
-    samp: int, optional
-        Number of samples to use when doing the Monte Carlo Integration (Default = 10000)
 
     Returns
     --------
@@ -195,7 +194,7 @@ def plot_vdf(dis_vdf):
     return fig,ax
 
 
-def arb_p_response(x_meas,dis_vdf,pts=10):
+def arb_p_response(x_meas,dis_vdf,samp):
     """
     Parameters
     -----------
@@ -212,6 +211,8 @@ def arb_p_response(x_meas,dis_vdf,pts=10):
     dis_vdf: dictionary
          A dictionary returned from make_discrete_vdf
 
+    samp: int, optional
+        Number of samples to use when doing the Monte Carlo Integration (Default = 10000)
 
     Returns:
     --------
@@ -245,7 +246,7 @@ def arb_p_response(x_meas,dis_vdf,pts=10):
 
         inp = np.array([fc_vlo,fc_vhi,phi_ang,theta_ang])
 
-        out = fc_meas(dis_vdf,inp,pts=pts)
+        out = fc_meas(dis_vdf,inp,samp=samp)
         #print(out)
         dis_cur.append(out)
 
@@ -254,7 +255,7 @@ def arb_p_response(x_meas,dis_vdf,pts=10):
     return dis_cur
 
 
-def fc_meas(vdf,fc,pts=10,fov_ang=45.,sc ='wind',samp=10000):
+def fc_meas(vdf,fc,fov_ang=45.,sc ='wind',samp=10000):
     """
     Get the spacecraft measurement of the VDF
 
@@ -265,9 +266,6 @@ def fc_meas(vdf,fc,pts=10,fov_ang=45.,sc ='wind',samp=10000):
    
     fc: np.array
         A numpy containing properties of the faraday cup in lo, hi, phi, theta
-
-    pts: integer, optional
-        Number of points to calculate the for integrated solution.
 
     sc: string, optional
         Spacecraft effective area to use (Default = 'wind')
@@ -313,7 +311,9 @@ def fc_meas(vdf,fc,pts=10,fov_ang=45.,sc ='wind',samp=10000):
     args = (sc,hold_ufc,hold_bfc,hold_qgrid,hold_pgrid,hold_vdf)
         
     #meas = tplquad(int_3d, fc_vlo, fc_vhi, vx_lim_min, vx_lim_max, vy_lim_min, vy_lim_max, epsabs=1.e-4, epsrel=1.e-4,args=args)
-    meas = mci.mc_trip(int_3d, fc_vlo, fc_vhi, vx_lim_min, vx_lim_max, vy_lim_min, vy_lim_max,n=samp,args=args)
+    meas = mci.mc_trip(int_3d, fc_vlo, fc_vhi, vx_lim_min, vx_lim_max, vy_lim_min, vy_lim_max,args=args,samp=samp)
+    #vz, vx, vy = sympy.symbols('vz vx vy')
+    #meas = sympy.integrate(int_3d(vz,vx,vy,*args),(vz,fc_vol,fc_vhi),(vx,vx_lim_min,vx_lim_max),(vy,vy_lim_min,vy_lim_max))
 
     return meas
 
@@ -322,7 +322,7 @@ def int_3d(vz,vx,vy,spacecraft='wind',ufc=[1],bfc=[1],qgrid=[1],pgrid=[1],vdf=[1
     """
     3D function to integrate. Vz is defined to be normal to the cup sensor
     """
-    e =  1.60217646e-19   # coulombs
+    e =  -1.60217646e-19   # coulombs
 
 ##3    eff_area_inp = partial(eff_area,spacecraft=spacecraft)
 ##3    vdf_inp = partial(vdf_calc,hold_bfc=bfc,hold_ufc=ufc,
@@ -350,10 +350,10 @@ def int_3d(vz,vx,vy,spacecraft='wind',ufc=[1],bfc=[1],qgrid=[1],pgrid=[1],vdf=[1
     #print(test_vdf)
     #val = e*(vz)*eff_area_inp(vx,vy,vz)*vdf_inp(-vx,vy,vz)
     #print(vz)
-    val =  (vz)*test_area*test_vdf #eff_area_inp(vz,vx,vy)*vdf_inp(vz,vx,vy)
+    val =  e*(vz)*test_area*test_vdf #eff_area_inp(vz,vx,vy)*vdf_inp(vz,vx,vy)
 
     #remove nan values
-    val = val[np.isfinite(val)]
+    #val = val[np.isfinite(val)]
     #print(val)
     return val
 
@@ -415,40 +415,9 @@ def vdf_calc(vz,vx,vy,hold_bfc=[1,1,1],hold_ufc=[1,1,1],hold_qgrid=[1],hold_pgri
     p = (vx-ux)*bx + (vy-uy)*by + (vz-uz)*bz
     q = np.sqrt( (vx-ux)**2 + (vy-uy)**2 + (vz-uz)**2 - p**2)
 
-    #print('XXXXXXXXXXXXXXXXXXXXXXX')
-    #print('NEW')
-    #print(vx,vy,vz)
-    #print(ux,uy,uz)
-    #print(hold_pgrid.min(),hold_qgrid.min())
-    #print(p,q)
-    #print(hold_pgrid.max(),hold_qgrid.max())
-    #print('XXXXXXXXXXXXXXXXXXXXXXX')
-    
-    #select array around p and q to grab from p and q grid to speed up interpolation
-    #Switch to passing array in MC integrator
-    ####diff_p = np.abs(p-hold_pgrid)
-    ####diff_q = np.abs(q-hold_qgrid)
-
-    #get indices where true
-    ####mind_pq_x,mind_pq_y, = np.where((diff_p < tol) & (diff_q < tol))
-
-
-    #####print(hold_pgrid.min(),hold_qgrid.min())
-    #####print(p,q)
-    #####print(hold_pgrid.max(),hold_qgrid.max())
-
-    ####if mind_pq_x.size == 0:
-    ####    return 0 
-    #####prevent last row errors due to none unique numbers in griddata
-    ####if ((np.unique(mind_pq_x).size < 2) | (np.unique(mind_pq_y).size < 2)):
-    ####    return 0
-
-    ###print(ux,vx)
-    ###print(hold_vdf[mind_pq_x,mind_pq_y].mean())
-
-    #Interpolate "measured" p,q values from grid
     ####vals = interp.griddata( (hold_pgrid[mind_pq_x,mind_pq_y],hold_qgrid[mind_pq_x,mind_pq_y]),hold_vdf[mind_pq_x,mind_pq_y], (p,q),method='linear')
-    vals = interp.griddata( (hold_pgrid.ravel(),hold_qgrid.ravel()),hold_vdf.ravel(), (p.ravel(),q.ravel()),method='linear')
+    #nearest is faster and probably okay with a 0.5km/s grid
+    vals = interp.griddata( (hold_pgrid.ravel(),hold_qgrid.ravel()),hold_vdf.ravel(), (p.ravel(),q.ravel()),method='nearest',fill_value=0.0)
 
     ###print(vals)
     return vals
@@ -472,6 +441,61 @@ def vdf_calc(vz,vx,vy,hold_bfc=[1,1,1],hold_ufc=[1,1,1],hold_qgrid=[1],hold_pgri
 ####
 ####
 ####
+def p_bimax_response(x_meas, p_solpar):
+    co_charge =  1.60217646e-19   # coulombs
+    # solar wind proton parameters
+    ux  =p_solpar[0]
+    uy  =p_solpar[1]
+    uz  =p_solpar[2]
+    wper=p_solpar[3]
+    wpar=p_solpar[4]
+    Np  =p_solpar[5]
+    # FC measurement parameters
+    vn	= x_meas[0,:]# speed window to measure
+    dv	= x_meas[1,:]# width of speed window to measure
+    Pc 	= x_meas[2,:]# orientation angle of cup (from X to Y) in radians
+    Tc 	= x_meas[3,:]# orientation angle of cup (from XY plane to Z) 
+    bxn = x_meas[4,:]# Magnetic field unit vector
+    byn = x_meas[5,:]
+    bzn = x_meas[6,:]
+    bz2	= bzn**2.
+    # components of bulk speed for each measurement in FC frame
+    uxfc	=	 ux*np.sin(Pc)         + uy*np.cos(Pc)
+    uyfc	=	-ux*np.cos(Pc)*np.sin(Tc) + uy*np.sin(Pc)*np.sin(Tc) + uz*np.cos(Tc)
+    uzfc	=	 ux*np.cos(Pc)*np.cos(Tc) - uy*np.sin(Pc)*np.cos(Tc) + uz*np.sin(Tc)
+    vxmax = uxfc
+    vymax = uyfc
+    vzmax = uzfc
+    ufc = convert_gse_fc(p_solpar[:3],Pc,Tc)
+    #print([vxmax,vymax,vzmax])
+    #print(ufc)
+    vxmax = ufc[0]
+    vymax = ufc[1]
+    vzmax = ufc[2]
+    # get effective area for flow upon the sensor
+    # using the approximation that the flow is all coming in at the bulk
+    # flow angle (i.e. the cold plasma approximation that the the thermal
+    # speed is negligible)
+    a_eff_p = eff_area(-vzmax, vxmax, vymax)
+    
+    # calculate modified gaussian integral of v*f(v). Limits in
+    # transverse directions are infinity, i.e. approximate that the whole distribution is
+    # within the field of view. This allows us to reduce the integral to Erf() expressions
+    vb_norm_p = -uzfc
+    w_eff_p = np.sqrt((bz2)*(wpar**2.) + (1.0 - bz2)*(wper**2.) )
+    upper_p     = ((1.0/w_eff_p) * (     	vn +   
+                                      	0.5 * dv - vb_norm_p ) )
+    lower_p     = ((1.0/w_eff_p) * (     	vn - 
+    					0.5 * dv - vb_norm_p )) 
+    f_p_curr_a  = (0.5 * co_charge  * a_eff_p * Np )   
+    f_p_curr_b_a  = ( vb_norm_p * ( erf( upper_p ) - erf(( lower_p ) )))
+    f_p_curr_b_b  = -(w_eff_p/np.sqrt(np.pi)) *( np.exp( - upper_p**2.) - np.exp( - lower_p**2 ) ) 
+
+    f_p_curr = f_p_curr_a*(f_p_curr_b_a+f_p_curr_b_b)
+    
+    return f_p_curr
+
+
 
 def return_space_craft_ef(spacecraft):
     """
