@@ -55,16 +55,33 @@ def mp_trip(int_3d,z_lo,z_hi,x_lo,x_hi,y_lo,y_hi,args=(),samp=1e4):
     Midpoint integration for generic Faraday Cup
     """
 
-    midpoint_triple2(int_3d,z_lo,z_hi,x_lo(z_hi),x_hi(z_hi),y)
+    #midpoint_triple2(int_3d,z_lo,z_hi,x_lo(z_hi),x_hi(z_hi),y)
+    #width of mid-point
+    h = (z_hi-z_lo)/samp
 
-    return area
 
-def test_3d_int():
+    area = 0.
+    z = z_lo
+    #loop over all z values
+    while z <= z_hi: 
+        #get x min and max
+        x_min,x_max = x_lo(z),x_hi(z)
+        x = x_min
+        #loop over all x values
+        while x <= x_max:
+             print(x)
+             y_min,y_max = y_lo(z,x),y_hi(z,x)
+             y,h_y = np.linspace(y_min,y_max,samp,endpoint=True,retstep=True)
+             area_cal = int_3d(z,x,y,*args)
+             area += np.sum(area_cal*h_y)
+             #increment x
+             x += h
+ 
+        #increment z
+        z += h    
 
-    mc_trip(int_3d,z_lo,z_hi,x_lo,x_hi,y_lo,y_hi,args=(),samp=1e4)
-
-    return
-
+    #return the cumlative area
+    return area*h**2
 
 def midpoint(f, a, b, n):
     h = float(b-a)/n
@@ -74,34 +91,59 @@ def midpoint(f, a, b, n):
     result *= h
     return result
 
-def midpoint_triple2(g, a, b, c, d, e, f, nx, ny, nz):
-    def p(x, y):
-        return midpoint(lambda z: g(x, y, z), e, f, nz)
+def mp_trip2(int_3d,z_lo,z_hi,x_lo,x_hi,y_lo,y_hi,args=(),samp=1e4):
+    samp = int(samp)
+    print(samp)
+    def p(z,x):
+        print(z)
+        return midpoint(lambda y: int_3d(z,x,y,*args),y_lo(z,x),y_hi(z,x),samp)
 
-    def q(x):
-        return midpoint(lambda y: p(x, y), c, d, ny)
+    def q(z):
+        return midpoint(lambda x: p(z,x),x_lo(z),x_hi(z),samp)
 
-    return midpoint(q, a, b, nx)
+    return midpoint(q,z_lo,z_hi,samp)
 
-def test_midpoint_triple():
-    """Test that a linear function is integrated exactly."""
-    def g(x, y, z):
-        return 2*x + y - 4*z
+def mp_trip3(int_3d,z_lo,z_hi,x_lo,x_hi,y_lo,y_hi,args=(),samp=1e4):
+    """
+    Midpoint integration for generic Faraday Cup
+    """
 
-    a = 0;  b = 2;  c = 2;  d = 3;  e = -1;  f = 2
-    import sympy
-    x, y, z = sympy.symbols('x y z')
-    I_expected = sympy.integrate(
-        g(x, y, z), (x, a, b), (y, c, d), (z, e, f))
-    for nx, ny, nz in (3, 5, 2), (4, 4, 4), (5, 3, 6):
-        I_computed1 = midpoint_triple1(
-            g, a, b, c, d, e, f, nx, ny, nz)
-        I_computed2 = midpoint_triple2(
-            g, a, b, c, d, e, f, nx, ny, nz)
-        tol = 1E-14
-        print I_expected, I_computed1, I_computed2
-        assert abs(I_computed1 - I_expected) < tol
-        assert abs(I_computed2 - I_expected) < tol
+    #midpoint_triple2(int_3d,z_lo,z_hi,x_lo(z_hi),x_hi(z_hi),y)
+    #width of mid-point
+    z,h_z = np.linspace(z_lo,z_hi,samp,endpoint=True,retstep=True)
 
-if __name__ == '__main__':
-    test_midpoint_triple()
+    #get xvalues
+    x_min,x_max = x_lo(z),x_hi(z)
+    x_diff = x_max-x_min
+    x_rang = np.arange(samp)
+    x_resl = x_diff/samp 
+    h_x = np.outer(x_resl,x_rang)
+    x      = np.outer(x_min,np.ones(h_x.shape[1]))+h_x  
+
+    #update z shape
+    z       = np.outer(z,np.ones(x.shape[1]))
+    h_z     = np.outer(h_z+np.zeros(int(samp)),np.ones(x.shape[1]))
+
+    #get yvalues
+    y_min, y_max = y_lo(z,x),y_hi(z,x)
+    y_diff       = y_max-y_min
+    y_rang       = np.arange(samp)
+    y_resl       = y_diff/samp
+    h_y          = np.outer(y_resl,y_rang).reshape(z.shape[0],x.shape[1],y_rang.size)
+    y            = np.outer(y_min,np.ones(h_y.shape[1])).reshape(z.shape[0],x.shape[1],y_rang.size)+h_y
+
+    #update z shape
+    z            = np.outer(z,np.ones(y.shape[2])).reshape(z.shape[0],x.shape[1],y_rang.size)  
+    h_z          = np.outer(h_z,np.ones(y.shape[2])).reshape(z.shape[0],x.shape[1],y_rang.size)  
+    #update x shape
+    x            = np.outer(x,np.ones(y.shape[2])).reshape(z.shape[0],x.shape[1],y_rang.size)  
+    h_x          = np.outer(h_x,np.ones(y.shape[2])).reshape(z.shape[0],x.shape[1],y_rang.size)  
+
+    #get total current inside area
+    mid_pnt = int_3d(z.ravel()+h_z.ravel()/2.,x.ravel()+h_x.ravel()/2.,y.ravel()+h_y.ravel()/2.,*args)
+    mid_area= mid_pnt*h_z.ravel()*h_x.ravel()*h_y.ravel()
+    tot_area= np.sum(mid_area)
+
+    return tot_area    
+
+
