@@ -2,9 +2,11 @@ import numpy as np
 from scipy.integrate import tplquad
 from functools import partial
 import scipy.interpolate as interp
+from scipy.interpolate import RectBivariateSpline
 from scipy.special import erf
 import monte_carlo_int as mci
 import sympy
+import time
 
 
 def make_discrete_vdf(pls_par,mag_par,pres=0.5,qres=0.5,clip=4.):
@@ -56,15 +58,20 @@ def make_discrete_vdf(pls_par,mag_par,pres=0.5,qres=0.5,clip=4.):
     
     #created 2D grid of velocities in the X and y direction
     pgrid, qgrid = np.meshgrid(p,q)
+    pgrid, qgrid = pgrid.T,qgrid.T
     
     #Get VDF constance
     a = n/(np.sqrt(np.pi**3.)*(wpar*wper**2.)) # 1/cm^3 * s^3 /km^3 
     
     #compute the raw vdf
     rawvdf = a*np.exp(- (pgrid/wpar)**2. - (qgrid/wper)**2.)
+
+
+    #create an interpolating function for the vdf
+    f = RectBivariateSpline(p,q,rawvdf)
     
     #create dictionary
-    dis_vdf = {'vdf':rawvdf,'pgrid':pgrid,'qgrid':qgrid,'u_gse':u_gse,'b_gse':mag_par}
+    dis_vdf = {'vdf':rawvdf,'pgrid':pgrid,'qgrid':qgrid,'u_gse':u_gse,'b_gse':mag_par,'vdf_func':f}
     return dis_vdf
 
 
@@ -297,6 +304,9 @@ def fc_meas(vdf,fc,fov_ang=45.,sc ='wind',samp=10000):
     hold_pgrid = vdf['pgrid']
     hold_qgrid = vdf['qgrid']
 
+    #changed to bivariate spline funciton instead of mesh grid 2018/08/02 J. Prchlik
+    hold_ifunc = vdf['vdf_func']
+
 
     #create vx limits
     vx_lim_min = lambda vz: -vz*np.tan(np.radians(fov_ang))
@@ -308,17 +318,20 @@ def fc_meas(vdf,fc,fov_ang=45.,sc ='wind',samp=10000):
 
     #create function with input parameters for int_3d
     #int_3d_inp = partial(int_3d,spacecraft=sc,ufc=hold_ufc,bfc=hold_bfc,qgrid=hold_qgrid,pgrid=hold_pgrid,vdf=hold_vdf)
-    args = (sc,hold_ufc,hold_bfc,hold_qgrid,hold_pgrid,hold_vdf)
+    args = (sc,hold_ufc,hold_bfc,hold_qgrid,hold_pgrid,hold_vdf,hold_ifunc)
         
     #meas = tplquad(int_3d, fc_vlo, fc_vhi, vx_lim_min, vx_lim_max, vy_lim_min, vy_lim_max, epsabs=1.e-4, epsrel=1.e-4,args=args)
+   
     meas = mci.mc_trip(int_3d, fc_vlo, fc_vhi, vx_lim_min, vx_lim_max, vy_lim_min, vy_lim_max,args=args,samp=samp)
+    #meas = mci.mp_trip2(int_3d, fc_vlo, fc_vhi, vx_lim_min, vx_lim_max, vy_lim_min, vy_lim_max,args=args,samp=samp)
+    #meas = mci.mp_trip3(int_3d, fc_vlo, fc_vhi, vx_lim_min, vx_lim_max, vy_lim_min, vy_lim_max,args=args,samp=samp)
     #vz, vx, vy = sympy.symbols('vz vx vy')
     #meas = sympy.integrate(int_3d(vz,vx,vy,*args),(vz,fc_vol,fc_vhi),(vx,vx_lim_min,vx_lim_max),(vy,vy_lim_min,vy_lim_max))
 
     return meas
 
 
-def int_3d(vz,vx,vy,spacecraft='wind',ufc=[1],bfc=[1],qgrid=[1],pgrid=[1],vdf=[1]): 
+def int_3d(vz,vx,vy,spacecraft='wind',ufc=[1],bfc=[1],qgrid=[1],pgrid=[1],vdf=[1],ifunc=lambda p,q: p*q): 
     """
     3D function to integrate. Vz is defined to be normal to the cup sensor
     """
@@ -339,7 +352,7 @@ def int_3d(vz,vx,vy,spacecraft='wind',ufc=[1],bfc=[1],qgrid=[1],pgrid=[1],vdf=[1
     #Get observed VDF
     test_vdf  =  vdf_calc(vz,vx,vy,hold_bfc=bfc,hold_ufc=ufc,
                       hold_qgrid=qgrid,hold_pgrid=pgrid,
-                      hold_vdf=vdf)
+                      hold_vdf=vdf,hold_ifunc=ifunc)
     #if ((test_vdf < 1.e-16) | (not np.isfinite(test_vdf))):
     #    return 0
 
@@ -383,12 +396,14 @@ def eff_area(vz,vx,vy,spacecraft='wind'):
 # for a VDF that is defined on a grid, get an interpolate
 # at any desired location in phase space
 #
-def vdf_calc(vz,vx,vy,hold_bfc=[1,1,1],hold_ufc=[1,1,1],hold_qgrid=[1],hold_pgrid=[1],hold_vdf=[1],tol=5):
+def vdf_calc(vz,vx,vy,inter_f=lambda p,q : p*q,hold_bfc=[1,1,1],hold_ufc=[1,1,1],hold_qgrid=[1],hold_pgrid=[1],hold_vdf=[1],hold_ifunc=lambda p,q: p*q):
     """
     Calculates measured VDF
 
     Parameters
     ----------
+    inter_f: function
+        Function to use for interpolation
     tol: float, optional
         Tolerance to include in interpolating p and q values (Default = 5 km/s)
     """
@@ -415,12 +430,23 @@ def vdf_calc(vz,vx,vy,hold_bfc=[1,1,1],hold_ufc=[1,1,1],hold_qgrid=[1],hold_pgri
     p = (vx-ux)*bx + (vy-uy)*by + (vz-uz)*bz
     q = np.sqrt( (vx-ux)**2 + (vy-uy)**2 + (vz-uz)**2 - p**2)
 
-    ####vals = interp.griddata( (hold_pgrid[mind_pq_x,mind_pq_y],hold_qgrid[mind_pq_x,mind_pq_y]),hold_vdf[mind_pq_x,mind_pq_y], (p,q),method='linear')
-    #nearest is faster and probably okay with a 0.5km/s grid
-    vals = interp.griddata( (hold_pgrid.ravel(),hold_qgrid.ravel()),hold_vdf.ravel(), (p.ravel(),q.ravel()),method='nearest',fill_value=0.0)
 
+
+    ####vals = interp.griddata( (hold_pgrid[mind_pq_x,mind_pq_y].ravel(),hold_qgrid[mind_pq_x,mind_pq_y].ravel()),hold_vdf[mind_pq_x,mind_pq_y].ravel(), (p,q),method='nearest', fill_value=0.0)
+    #nearest is faster and probably okay with a 0.5km/s grid
+    ##time_start = time.time()
+    #vals = interp.griddata( (hold_pgrid.ravel(),hold_qgrid.ravel()),hold_vdf.ravel(), (p.ravel(),q.ravel()),method='nearest',fill_value=0.0)
+    #vals = []
+    #for i,j in zip(p,q):
+    #    vals.append(hold_ifunc(i,j))
+    #turn of grid so it does not calculation all combinations of p and q 2018/08/02 J. Prchlik
+    vals = hold_ifunc(p,q,grid=False)
+    #code run time
+    #time_elapsed = (time.time() - time_start)
+    ##Time elapsed pring
+    #kprint('Time to run Interpolation  is {0:5.1f}s'.format(time_elapsed))
     ###print(vals)
-    return vals
+    return np.array(vals)
 
 # This function is used by INT_3D to set limits of integration 
 # on the transverse velocity. 
