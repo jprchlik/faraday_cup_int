@@ -39,7 +39,7 @@ def make_discrete_vdf(pls_par,mag_par,pres=0.5,qres=0.5,clip=4.):
     dis_vdf: dictionary
         Dictionary containing a discrete VDF function ['vdf'], the propogating direction grid ['pgrid'],
         the perpendicular to the propogating direction grid ['qgrid'], velocity vector in gse ['u_gse'],
-        and the normal magnetic field vector ['b_gse'].   
+        the normal magnetic field vector ['b_gse'] and a BiVariateSpline interpolation function ['vdf_func'].   
     """
 
     #Set up names for easy call
@@ -300,11 +300,7 @@ def fc_meas(vdf,fc,fov_ang=45.,sc ='wind',samp=10000):
     #"Measured" VDF
     hold_vdf = vdf['vdf']
  
-    #get p and p grids
-    hold_pgrid = vdf['pgrid']
-    hold_qgrid = vdf['qgrid']
-
-    #changed to bivariate spline funciton instead of mesh grid 2018/08/02 J. Prchlik
+    #interpolating function 
     hold_ifunc = vdf['vdf_func']
 
 
@@ -318,7 +314,7 @@ def fc_meas(vdf,fc,fov_ang=45.,sc ='wind',samp=10000):
 
     #create function with input parameters for int_3d
     #int_3d_inp = partial(int_3d,spacecraft=sc,ufc=hold_ufc,bfc=hold_bfc,qgrid=hold_qgrid,pgrid=hold_pgrid,vdf=hold_vdf)
-    args = (sc,hold_ufc,hold_bfc,hold_qgrid,hold_pgrid,hold_vdf,hold_ifunc)
+    args = (sc,hold_ufc,hold_bfc,hold_ifunc)
         
     #meas = tplquad(int_3d, fc_vlo, fc_vhi, vx_lim_min, vx_lim_max, vy_lim_min, vy_lim_max, epsabs=1.e-4, epsrel=1.e-4,args=args)
    
@@ -334,9 +330,25 @@ def fc_meas(vdf,fc,fov_ang=45.,sc ='wind',samp=10000):
 
 
 #Note unlike IDL PYTHON expects VZ to be last not first
-def int_3d(vx,vy,vz,spacecraft='wind',ufc=[1],bfc=[1],qgrid=[1],pgrid=[1],vdf=[1],ifunc=lambda p,q: p*q): 
+def int_3d(vx,vy,vz,spacecraft='wind',ufc=[1],bfc=[1],ifunc=lambda p,q: p*q): 
     """
     3D function to integrate. Vz is defined to be normal to the cup sensor
+
+    Parameters
+    ----------
+    vz: np.array
+        The velocity of the solar wind normal FC in km/s
+    vx: np.array
+        The velocity of the solar wind in the x direction with respect to the FC in km/s
+    vy: np.array                                                                 
+        The velocity of the solar wind in the y direction with respect to the FC in km/s
+    bfc: np.array
+        An array of magnetic field vectors in the faraday cup corrdinates [Bz,Bx,By]
+    ufc: np.array
+        An array of plasma velocity vectors in the faraday cup corrdinates [Vz,Vx,Vy]
+    hold_ifunc: ND interpolation function
+        Function of a RectBivariateSpline (https://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.RectBivariateSpline.html).
+        Doing the interpolation this way is much faster than reinterpolating from a grid everytime as early version of the code required.
     """
     e =  -1.60217646e-19   # coulombs
 
@@ -354,8 +366,7 @@ def int_3d(vx,vy,vz,spacecraft='wind',ufc=[1],bfc=[1],qgrid=[1],pgrid=[1],vdf=[1
 
     #Get observed VDF
     test_vdf  =  vdf_calc(vz,vx,vy,hold_bfc=bfc,hold_ufc=ufc,
-                      hold_qgrid=qgrid,hold_pgrid=pgrid,
-                      hold_vdf=vdf,hold_ifunc=ifunc)
+                      hold_ifunc=ifunc)
     #if ((test_vdf < 1.e-16) | (not np.isfinite(test_vdf))):
     #    return 0
 
@@ -376,7 +387,21 @@ def int_3d(vx,vy,vz,spacecraft='wind',ufc=[1],bfc=[1],qgrid=[1],pgrid=[1],vdf=[1
 
 def eff_area(vz,vx,vy,spacecraft='wind'):
     """
-    Calculates effective area
+    Calculates effective area for a given set of velocities
+
+    Parameters
+    ----------
+    vz: np.array
+        The velocity of the solar wind normal FC in km/s
+    vx: np.array
+        The velocity of the solar wind in the x direction with respect to the FC in km/s
+    vy: np.array                                                                 
+        The velocity of the solar wind in the y direction with respect to the FC in km/s
+    
+    Returns
+    -------
+    calc_eff_area: np.array
+        The effective area for each set of velocites
     """
 
     #get angle onto the cup
@@ -399,16 +424,31 @@ def eff_area(vz,vx,vy,spacecraft='wind'):
 # for a VDF that is defined on a grid, get an interpolate
 # at any desired location in phase space
 #
-def vdf_calc(vz,vx,vy,inter_f=lambda p,q : p*q,hold_bfc=[1,1,1],hold_ufc=[1,1,1],hold_qgrid=[1],hold_pgrid=[1],hold_vdf=[1],hold_ifunc=lambda p,q: p*q):
+def vdf_calc(vz,vx,vy,hold_bfc=[1,1,1],hold_ufc=[1,1,1],hold_ifunc=lambda p,q: p*q):
     """
     Calculates measured VDF
 
     Parameters
     ----------
-    inter_f: function
-        Function to use for interpolation
-    tol: float, optional
-        Tolerance to include in interpolating p and q values (Default = 5 km/s)
+    vz: np.array
+        The velocity of the solar wind normal FC in km/s
+    vx: np.array
+        The velocity of the solar wind in the x direction with respect to the FC in km/s
+    vy: np.array                                                                 
+        The velocity of the solar wind in the y direction with respect to the FC in km/s
+    hold_bfc: np.array
+        An array of magnetic field vectors in the faraday cup corrdinates [Bz,Bx,By]
+    hold_ufc: np.array
+        An array of plasma velocity vectors in the faraday cup corrdinates [Vz,Vx,Vy]
+    hold_ifunc: ND interpolation function
+        Function of a RectBivariateSpline (https://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.RectBivariateSpline.html).
+        Doing the interpolation this way is much faster than reinterpolating from a grid everytime as early version of the code required.
+        The spline function is calculated earlier at in this code at make_discrete_vdf.
+
+    Returns
+    -------
+    vals: np.array
+        An array of interpolated detection currents along the detector
     """
 #COMMON measurement_params, hold_vdf, hold_pgrid, hold_qgrid, hold_ufc, hold_bfc
 
@@ -443,6 +483,7 @@ def vdf_calc(vz,vx,vy,inter_f=lambda p,q : p*q,hold_bfc=[1,1,1],hold_ufc=[1,1,1]
     #for i,j in zip(p,q):
     #    vals.append(hold_ifunc(i,j))
     #turn of grid so it does not calculation all combinations of p and q 2018/08/02 J. Prchlik
+    #intepolate measrued values along the grid
     vals = hold_ifunc(p,q,grid=False)
     #code run time
     ##time_elapsed = (time.time() - time_start)
@@ -451,26 +492,27 @@ def vdf_calc(vz,vx,vy,inter_f=lambda p,q : p*q,hold_bfc=[1,1,1],hold_ufc=[1,1,1]
     ###print(vals)
     return np.array(vals)
 
-# This function is used by INT_3D to set limits of integration 
-# on the transverse velocity. 
-# Right now using 45 degree max FOV. The effective area function 
-# is nonzero out to 62 degrees, so this is not a good choice.
-####def vx_limits(vz,fov_ang=45.):
-####   v_lo = -vz*np.tan(np.radians(fov_ang))
-####   v_hi =  vz*np.tan(np.radians(fov_ang))
-####   return [v_lo<v_hi, v_hi>v_lo]
-####
-##### This function sets limits of integration for the other transverse component.
-##### Again, it is presently limitted to 45 degrees, which isn't great
-####def vy_limits( vz, vx,fov_ang=45.)
-####    vperp = vz*np.tan(np.radians(fov_ang))
-####    v_lo = (-np.sqrt(vperp**2 - vx**2))
-####    v_hi = np.sqrt(vperp**2 - vx**2)
-####    return [v_lo<v_hi, v_hi>v_lo]
-####
-####
-####
 def p_bimax_response(x_meas, p_solpar):
+    """
+    Parameters:
+    ----------- 
+    x_meas: np.array
+               x[0,:]          v_window  [km/s] 
+               x[1,:]          v_delta   [km/s] 
+               x[2,:]          phi_ang [rad] 
+               x[3,:]          theta_ang [rad] 
+               x[4,:]      b in FC "x"
+               x[5,:]      b in FC "y"
+               x[6,:]      b in FC "z" normal to cup
+    p_solarpar: np.array
+        The solar wind parameters in GSE coordinates [Vx,Vy,Vz,Bx,By,Bz] in units of [km/s,km/s,km/s,nT,nT,nT]
+
+    Returns
+    ------
+    f_p_curr: np.array
+        The observed current density per velocity bin assuming a cold plasma 
+    """
+
     co_charge =  1.60217646e-19   # coulombs
     # solar wind proton parameters
     ux  =np.double(p_solpar[0])
@@ -529,12 +571,25 @@ def p_bimax_response(x_meas, p_solpar):
 def return_space_craft_ef(spacecraft):
     """
     Returns effective area for a give spacecraft
+    Currently set up so the index corresponds to 0.1 degrees on the cup because that is how 
+    the wind effected area is defined.
+    
+    Parameters
+    ----------
+    spacecraft: str
+        String corresponding to the spacecraft you want the effective area for. Currently,
+        the only option is wind
+
+    Returns
+    -------
+    eff_area = np.array
+        Array of effective area values where each index corresponds to 0.1 degrees
     """
 
 
 
     #Get wind effective area
-    if spacecraft == 'wind':
+    if spacecraft.lower() == 'wind':
         eff_area = np.zeros(910)
         eff_area[  0]=3.3820000e+06 
         eff_area[  1]=3.3821000e+06 
