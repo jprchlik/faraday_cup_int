@@ -21,27 +21,16 @@ mag_par = np.array([np.cos(np.radians(75.)), np.sin(np.radians(75.)), 0.])
 #number of sample for integration
 samp = 7e1
 #make a discrete VDF
-dis_vdf = mdv.make_discrete_vdf(pls_par,mag_par,pres=15.00,qres=15.00,clip=4.)
+dis_vdf = mdv.make_discrete_vdf(pls_par,mag_par,pres=1.00,qres=1.00,clip=4.)
 
 #report some measurements
-grid_v = np.arange(300,600,15)
+grid_v = np.arange(300,600,20)
 x_meas = mdv.make_fc_meas(dis_vdf,fc_spd=grid_v,fc_phi=-15.,fc_theta=15.)
 
 #interatable to pass to pool
 
 #Get the integral values in parallel
 looper = np.array((x_meas,dis_vdf,samp)*8).reshape(8,3)
-
-##looper[0][-1] = 80
-##looper[1][-1] = 80
-##looper[2][-1] = 80
-##looper[3][-1] = 80
-##looper[4][-1] = 90
-##looper[5][-1] = 90
-##looper[6][-1] = 90
-##looper[7][-1] = 90
-
-
 
 
 
