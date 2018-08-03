@@ -4,10 +4,40 @@ import mid_point_loop as mpl
 import numexpr as ne
 import time
 
-def mc_trip(int_3d,z_lo,z_hi,x_lo,x_hi,y_lo,y_hi,args=(),samp=1e4):
+def mc_trip(int_3d,z_lo,z_hi,x_lo,x_hi,y_lo,y_hi,args=(),samp=1e5):
     """
     Monte carlo integrator for solar wind on generic Faraday Cup
-    Slow for high precision
+    Works but takes 30s per run to achieve a reasonable precision (samp = 1e6)
+
+    Parameters
+    ---------- 
+    int_3d: function
+        A function to integrate over. Can be any 3D function defined in python.
+    z_lo: float
+        The lower limit to integrate over in the z variable
+    z_hi: float
+        The upper limit to integrate over in the z variable
+    x_lo: function
+        The lower bound for the x variable in integration. If you want a constant
+        you can define x_lo = z: z*0+C
+    x_hi: function
+        The upper bound for the x variable in integration. If you want a constant
+        you can define x_hi = z: z*0+C
+    y_lo: function
+        The lower bound for the y variable in integration. If you want a constant
+        you can define y_lo = z,x: z*x*0+C
+    y_hi: function
+        The upper bound for the y variable in integration. If you want a constant
+        you can define y_hi = z,x: z*x*0+C
+    args: tuple,optional
+        Tuple of arguments to pass to a function.
+    samp: int or float,optional
+        Number of samples per variable (Default = 1e5)
+   
+    Returns
+    -------
+    area_mc*averg_c: float
+        The integral of the given function over the given limits
     """
 
     #number of samples
@@ -64,7 +94,37 @@ def mc_trip(int_3d,z_lo,z_hi,x_lo,x_hi,y_lo,y_hi,args=(),samp=1e4):
 def mp_trip(int_3d,z_lo,z_hi,x_lo,x_hi,y_lo,y_hi,args=(),samp=1e4):
     """
     Midpoint integration for generic Faraday Cup
-    Works but slow for high precision
+    Works really slow for high precision ~2 minutes.
+
+    Parameters
+    ---------- 
+    int_3d: function
+        A function to integrate over. Can be any 3D function defined in python.
+    z_lo: float
+        The lower limit to integrate over in the z variable
+    z_hi: float
+        The upper limit to integrate over in the z variable
+    x_lo: function
+        The lower bound for the x variable in integration. If you want a constant
+        you can define x_lo = z: z*0+C
+    x_hi: function
+        The upper bound for the x variable in integration. If you want a constant
+        you can define x_hi = z: z*0+C
+    y_lo: function
+        The lower bound for the y variable in integration. If you want a constant
+        you can define y_lo = z,x: z*x*0+C
+    y_hi: function
+        The upper bound for the y variable in integration. If you want a constant
+        you can define y_hi = z,x: z*x*0+C
+    args: tuple,optional
+        Tuple of arguments to pass to a function.
+    samp: int or float,optional
+        Number of samples per variable (Default = 70)
+   
+    Returns
+    -------
+    area_cal: float
+        The integral of the given function over the given limits
     """
 
 
@@ -113,7 +173,7 @@ def mp_trip(int_3d,z_lo,z_hi,x_lo,x_hi,y_lo,y_hi,args=(),samp=1e4):
     print('Time to run Int. Calc. {0:2.1f}'.format(time_mp_e-time_mp_s))
 
     #return the cumlative area
-    return area_cal,arr
+    return area_cal
 
 def midpoint(f, a, b, n,vector=False):
     n = int(n)
@@ -131,10 +191,41 @@ def midpoint(f, a, b, n,vector=False):
         result *= h
         return result
 
-def mp_trip2(int_3d,z_lo,z_hi,x_lo,x_hi,y_lo,y_hi,args=(),samp=1e4):
+def mp_trip2(int_3d,z_lo,z_hi,x_lo,x_hi,y_lo,y_hi,args=(),samp=70):
     """
-    Midpoint integration for generic Faraday Cup
-    Works but slow for high precision
+    Midpoint integration for generic Faraday Cup. Uses nested functions 
+    to speed up computations but ends up being slow for moderate values of
+    samp (> 20), thus does not quickly return good precision.
+
+    Parameters
+    ---------- 
+    int_3d: function
+        A function to integrate over. Can be any 3D function defined in python.
+    z_lo: float
+        The lower limit to integrate over in the z variable
+    z_hi: float
+        The upper limit to integrate over in the z variable
+    x_lo: function
+        The lower bound for the x variable in integration. If you want a constant
+        you can define x_lo = z: z*0+C
+    x_hi: function
+        The upper bound for the x variable in integration. If you want a constant
+        you can define x_hi = z: z*0+C
+    y_lo: function
+        The lower bound for the y variable in integration. If you want a constant
+        you can define y_lo = z,x: z*x*0+C
+    y_hi: function
+        The upper bound for the y variable in integration. If you want a constant
+        you can define y_hi = z,x: z*x*0+C
+    args: tuple,optional
+        Tuple of arguments to pass to a function.
+    samp: int or float,optional
+        Number of samples per variable (Default = 70)
+   
+    Returns
+    -------
+    area_cal: float
+        The integral of the given function over the given limits
     """
     def p(z,y):
         return midpoint(lambda x: int_3d(x,y,z,*args),y_lo(z,y),y_hi(z,y),samp,vector=True)
@@ -193,9 +284,42 @@ def mp_trip3(int_3d,z_lo,z_hi,x_lo,x_hi,y_lo,y_hi,args=(),samp=1e4):
     return tot_area,z,x,y
 
 
-def mp_trip_cython(int_3d,z_lo,z_hi,x_lo,x_hi,y_lo,y_hi,args=(),samp=1e4):
+def mp_trip_cython(int_3d,z_lo,z_hi,x_lo,x_hi,y_lo,y_hi,args=(),samp=70):
     """
-    Midpoint integral using Cython
+    Midpoint integral using Cython to build an array of x,dx,y,dy,z,dz arrays. It was built
+    for intregration to compute a RDF for the solar wind but can be used for any integral.
+    Note the Z,X,Y convention is left over from the IDL convention. The integration works
+    by integrating over z then x then y.
+   
+    Parameters
+    ---------- 
+    int_3d: function
+        A function to integrate over. Can be any 3D function defined in python.
+    z_lo: float
+        The lower limit to integrate over in the z variable
+    z_hi: float
+        The upper limit to integrate over in the z variable
+    x_lo: function
+        The lower bound for the x variable in integration. If you want a constant
+        you can define x_lo = z: z*0+C
+    x_hi: function
+        The upper bound for the x variable in integration. If you want a constant
+        you can define x_hi = z: z*0+C
+    y_lo: function
+        The lower bound for the y variable in integration. If you want a constant
+        you can define y_lo = z,x: z*x*0+C
+    y_hi: function
+        The upper bound for the y variable in integration. If you want a constant
+        you can define y_hi = z,x: z*x*0+C
+    args: tuple,optional
+        Tuple of arguments to pass to a function.
+    samp: int or float,optional
+        Number of samples per variable (Default = 70)
+   
+    Returns
+    -------
+    area_cal: float
+        The integral of the given function over the given limits
     """
 
 
@@ -203,6 +327,7 @@ def mp_trip_cython(int_3d,z_lo,z_hi,x_lo,x_hi,y_lo,y_hi,args=(),samp=1e4):
     arr = mpl.create_mid_point_arr(z_lo,z_hi,x_lo, x_hi, y_lo, y_hi,samp)
     #time_mp_s = time.time()
     arr = np.asarray(arr)
+    #compute the integral using midpoint integration
     area_cal = np.sum(int_3d(arr[:,0],arr[:,2],arr[:,4],*args)*np.prod(arr[:,1::2],axis=1))
     #time_mp_e = time.time()
     #print('Time to run Int. Calc. {0:2.1f}'.format(time_mp_e-time_mp_s))
