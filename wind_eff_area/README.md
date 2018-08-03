@@ -29,7 +29,7 @@ In order for this to run in python first run the following command,
 which will compile the code:
 
 
-tcsh\>python setup.py
+tcsh\>python setup.py build_ext --inplace
 
 
 
