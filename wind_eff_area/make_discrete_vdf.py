@@ -261,7 +261,7 @@ def arb_p_response(x_meas,dis_vdf,samp):
 
     return dis_cur
 
-
+#
 def fc_meas(vdf,fc,fov_ang=45.,sc ='wind',samp=10000):
     """
     Get the spacecraft measurement of the VDF
@@ -322,7 +322,9 @@ def fc_meas(vdf,fc,fov_ang=45.,sc ='wind',samp=10000):
         
     #meas = tplquad(int_3d, fc_vlo, fc_vhi, vx_lim_min, vx_lim_max, vy_lim_min, vy_lim_max, epsabs=1.e-4, epsrel=1.e-4,args=args)
    
-    meas = mci.mc_trip(int_3d, fc_vlo, fc_vhi, vx_lim_min, vx_lim_max, vy_lim_min, vy_lim_max,args=args,samp=samp)
+    #meas = mci.mc_trip(int_3d, fc_vlo, fc_vhi, vx_lim_min, vx_lim_max, vy_lim_min, vy_lim_max,args=args,samp=samp)
+    #meas = mci.mp_trip(int_3d, fc_vlo, fc_vhi, vx_lim_min, vx_lim_max, vy_lim_min, vy_lim_max,args=args,samp=samp)
+    meas = mci.mp_trip_cython(int_3d, fc_vlo, fc_vhi, vx_lim_min, vx_lim_max, vy_lim_min, vy_lim_max,args=args,samp=samp)
     #meas = mci.mp_trip2(int_3d, fc_vlo, fc_vhi, vx_lim_min, vx_lim_max, vy_lim_min, vy_lim_max,args=args,samp=samp)
     #meas = mci.mp_trip3(int_3d, fc_vlo, fc_vhi, vx_lim_min, vx_lim_max, vy_lim_min, vy_lim_max,args=args,samp=samp)
     #vz, vx, vy = sympy.symbols('vz vx vy')
@@ -331,7 +333,8 @@ def fc_meas(vdf,fc,fov_ang=45.,sc ='wind',samp=10000):
     return meas
 
 
-def int_3d(vz,vx,vy,spacecraft='wind',ufc=[1],bfc=[1],qgrid=[1],pgrid=[1],vdf=[1],ifunc=lambda p,q: p*q): 
+#Note unlike IDL PYTHON expects VZ to be last not first
+def int_3d(vx,vy,vz,spacecraft='wind',ufc=[1],bfc=[1],qgrid=[1],pgrid=[1],vdf=[1],ifunc=lambda p,q: p*q): 
     """
     3D function to integrate. Vz is defined to be normal to the cup sensor
     """
@@ -434,7 +437,7 @@ def vdf_calc(vz,vx,vy,inter_f=lambda p,q : p*q,hold_bfc=[1,1,1],hold_ufc=[1,1,1]
 
     ####vals = interp.griddata( (hold_pgrid[mind_pq_x,mind_pq_y].ravel(),hold_qgrid[mind_pq_x,mind_pq_y].ravel()),hold_vdf[mind_pq_x,mind_pq_y].ravel(), (p,q),method='nearest', fill_value=0.0)
     #nearest is faster and probably okay with a 0.5km/s grid
-    ##time_start = time.time()
+    #time_start = time.time()
     #vals = interp.griddata( (hold_pgrid.ravel(),hold_qgrid.ravel()),hold_vdf.ravel(), (p.ravel(),q.ravel()),method='nearest',fill_value=0.0)
     #vals = []
     #for i,j in zip(p,q):
@@ -442,9 +445,9 @@ def vdf_calc(vz,vx,vy,inter_f=lambda p,q : p*q,hold_bfc=[1,1,1],hold_ufc=[1,1,1]
     #turn of grid so it does not calculation all combinations of p and q 2018/08/02 J. Prchlik
     vals = hold_ifunc(p,q,grid=False)
     #code run time
-    #time_elapsed = (time.time() - time_start)
-    ##Time elapsed pring
-    #kprint('Time to run Interpolation  is {0:5.1f}s'.format(time_elapsed))
+    ##time_elapsed = (time.time() - time_start)
+    ####Time elapsed pring
+    ##print('Time to run Interpolation  is {0:5.1f}s'.format(time_elapsed))
     ###print(vals)
     return np.array(vals)
 
