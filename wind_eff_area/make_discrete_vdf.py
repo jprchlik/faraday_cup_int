@@ -473,52 +473,52 @@ def vdf_calc(vz,vx,vy,inter_f=lambda p,q : p*q,hold_bfc=[1,1,1],hold_ufc=[1,1,1]
 def p_bimax_response(x_meas, p_solpar):
     co_charge =  1.60217646e-19   # coulombs
     # solar wind proton parameters
-    ux  =p_solpar[0]
-    uy  =p_solpar[1]
-    uz  =p_solpar[2]
-    wper=p_solpar[3]
-    wpar=p_solpar[4]
-    Np  =p_solpar[5]
+    ux  =np.double(p_solpar[0])
+    uy  =np.double(p_solpar[1])
+    uz  =np.double(p_solpar[2])
+    wper=np.double(p_solpar[3])
+    wpar=np.double(p_solpar[4])
+    Np  =np.double(p_solpar[5])
     # FC measurement parameters
-    vn	= x_meas[0,:]# speed window to measure
-    dv	= x_meas[1,:]# width of speed window to measure
-    Pc 	= x_meas[2,:]# orientation angle of cup (from X to Y) in radians
-    Tc 	= x_meas[3,:]# orientation angle of cup (from XY plane to Z) 
-    bxn = x_meas[4,:]# Magnetic field unit vector
-    byn = x_meas[5,:]
-    bzn = x_meas[6,:]
-    bz2	= bzn**2.
+    vn	= np.double(x_meas[0,:])# speed window to measure
+    dv	= np.double(x_meas[1,:])# width of speed window to measure
+    Pc 	= np.double(x_meas[2,:])# orientation angle of cup (from X to Y) in radians
+    Tc 	= np.double(x_meas[3,:])# orientation angle of cup (from XY plane to Z) 
+    bxn = np.double(x_meas[4,:])# Magnetic field unit vector
+    byn = np.double(x_meas[5,:])
+    bzn = np.double(x_meas[6,:])
+    bz2	= np.double(bzn**2.)
     # components of bulk speed for each measurement in FC frame
-    uxfc	=	 ux*np.sin(Pc)         + uy*np.cos(Pc)
-    uyfc	=	-ux*np.cos(Pc)*np.sin(Tc) + uy*np.sin(Pc)*np.sin(Tc) + uz*np.cos(Tc)
-    uzfc	=	 ux*np.cos(Pc)*np.cos(Tc) - uy*np.sin(Pc)*np.cos(Tc) + uz*np.sin(Tc)
-    vxmax = uxfc
-    vymax = uyfc
-    vzmax = uzfc
+    ###uxfc	=	 ux*np.sin(Pc)         + uy*np.cos(Pc)
+    ###uyfc	=	-ux*np.cos(Pc)*np.sin(Tc) + uy*np.sin(Pc)*np.sin(Tc) + uz*np.cos(Tc)
+    ###uzfc	=	 ux*np.cos(Pc)*np.cos(Tc) - uy*np.sin(Pc)*np.cos(Tc) + uz*np.sin(Tc)
+    ###vxmax = uxfc
+    ###vymax = uyfc
+    ###vzmax = uzfc
     ufc = convert_gse_fc(p_solpar[:3],Pc,Tc)
     #print([vxmax,vymax,vzmax])
     #print(ufc)
-    vxmax = ufc[0]
-    vymax = ufc[1]
-    vzmax = ufc[2]
+    vxmax = np.double(ufc[0])
+    vymax = np.double(ufc[1])
+    vzmax = np.double(ufc[2])
     # get effective area for flow upon the sensor
     # using the approximation that the flow is all coming in at the bulk
     # flow angle (i.e. the cold plasma approximation that the the thermal
     # speed is negligible)
-    a_eff_p = eff_area(-vzmax, vxmax, vymax)
+    a_eff_p = np.double(eff_area(-vzmax, vxmax, vymax))
     
     # calculate modified gaussian integral of v*f(v). Limits in
     # transverse directions are infinity, i.e. approximate that the whole distribution is
     # within the field of view. This allows us to reduce the integral to Erf() expressions
-    vb_norm_p = -uzfc
-    w_eff_p = np.sqrt((bz2)*(wpar**2.) + (1.0 - bz2)*(wper**2.) )
-    upper_p     = ((1.0/w_eff_p) * (     	vn +   
+    vb_norm_p = -np.double(vzmax)
+    w_eff_p = np.double(np.sqrt((bz2)*(wpar**2.) + (1.0 - bz2)*(wper**2.) ))
+    upper_p     = np.double((1.0/w_eff_p) * (     	vn +   
                                       	0.5 * dv - vb_norm_p ) )
-    lower_p     = ((1.0/w_eff_p) * (     	vn - 
+    lower_p     = np.double((1.0/w_eff_p) * (     	vn - 
     					0.5 * dv - vb_norm_p )) 
-    f_p_curr_a  = (0.5 * co_charge  * a_eff_p * Np )   
-    f_p_curr_b_a  = ( vb_norm_p * ( erf( upper_p ) - erf(( lower_p ) )))
-    f_p_curr_b_b  = -(w_eff_p/np.sqrt(np.pi)) *( np.exp( - upper_p**2.) - np.exp( - lower_p**2 ) ) 
+    f_p_curr_a  = np.double(0.5 * co_charge  * a_eff_p * Np )   
+    f_p_curr_b_a  = np.double( vb_norm_p * ( erf( upper_p ) - erf(( lower_p ) )))
+    f_p_curr_b_b  = np.double(-(w_eff_p/np.sqrt(np.pi)) *( np.exp( - upper_p**2.) - np.exp( - lower_p**2 ) ) )
 
     f_p_curr = f_p_curr_a*(f_p_curr_b_a+f_p_curr_b_b)
     
