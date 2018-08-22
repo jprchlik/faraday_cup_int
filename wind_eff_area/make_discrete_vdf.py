@@ -74,6 +74,121 @@ def make_discrete_vdf(pls_par,mag_par,pres=0.5,qres=0.5,clip=4.):
     dis_vdf = {'vdf':rawvdf,'pgrid':pgrid,'qgrid':qgrid,'u_gse':u_gse,'b_gse':mag_par,'vdf_func':f}
     return dis_vdf
 
+def make_discrete_vdf_random(dis_vdf,sc_range=0.1,p_sig=10.,q_sig=10.):
+    """
+    Returns Discrete Velocity distribution function given a set of input parameters. With random variations 
+    in the raw vdf
+
+    Parameters:
+    -----------
+    
+    dis_vdf: dictionary
+        Dictionary containing a discrete VDF function ['vdf'], the propogating direction grid ['pgrid'],
+        the perpendicular to the propogating direction grid ['qgrid'], velocity vector in gse ['u_gse'],
+        the normal magnetic field vector ['b_gse'] and a BiVariateSpline interpolation function ['vdf_func'].   
+    sc_range: float,optional
+        Range to vary the input VDF as a fraction (Default = 0.1)
+        
+
+    Returns:
+    ---------
+    ran_vdf: dictionary
+        Dictionary containing a discrete VDF function ['vdf'], the propogating direction grid ['pgrid'],
+        the perpendicular to the propogating direction grid ['qgrid'], velocity vector in gse ['u_gse'],
+        the normal magnetic field vector ['b_gse'] and a BiVariateSpline interpolation function ['vdf_func'].   
+    """
+    from scipy.ndimage.filters import gaussian_filter
+
+    #distribution of velocities in the parallel direction
+    p = dis_vdf['pgrid'][:,0]
+    #distribution of velocities in the perpendicular direction
+    q = dis_vdf['qgrid'][0,:]
+    
+
+    #copy previous variables
+    pgrid = dis_vdf['pgrid']
+    qgrid = dis_vdf['qgrid']
+    u_gse = dis_vdf['u_gse']
+    mag_par = dis_vdf['b_gse']
+
+     
+    local_state = np.random.RandomState()
+    
+    #grab the raw vdf
+    rawvdf = dis_vdf['vdf']
+
+    #normalized probabilities to vary
+    normval = rawvdf/np.sum(rawvdf)
+   
+
+    #grab some value on the q,p grid use the input VDF to inform the prior
+    p_grab = float(local_state.choice(pgrid.ravel(),size=1,p=normval.ravel()))
+    q_grab = float(local_state.choice(qgrid.ravel(),size=1,p=normval.ravel()))
+
+
+    #calculate amplitude of vdf at p_grab, q_grab
+    a = float(dis_vdf['vdf_func'](p_grab,q_grab,grid=False))
+
+   
+    #vary the amplitude of the guassian by a small amount
+    low_off = 1.-sc_range
+    hgh_off = 1.+sc_range
+
+    #adjust the height of the peak
+    var = float(local_state.uniform(low=low_off,high=hgh_off,size=1))
+
+    #add variation guassian to rawvdf
+    ranvdf = a*np.exp(- ((pgrid-p_grab)/p_sig)**2. - ((qgrid-q_grab)/q_sig)**2.)+rawvdf
+
+    #create an interpolating function for the vdf
+    f = RectBivariateSpline(p,q,ranvdf)
+    
+    #create dictionary
+    ran_vdf = {'vdf':ranvdf,'pgrid':pgrid,'qgrid':qgrid,'u_gse':u_gse,'b_gse':mag_par,'vdf_func':f}
+    return ran_vdf
+
+def convert_fc_gse(speed,phi_ang,theta_ang):
+    """
+    Convert GSE coordinates to faraday cup coordinates
+
+    Parameters
+    ----------
+    fc_cor: float
+        Speed measured by the faraday cup
+    
+    phi_ang: float or np.array
+        Phi angle between GSE and FC (radians)
+
+    theta_ang: float or np.array
+        Phi angle between GSE and FC (radians)
+    
+    Returns
+    ---------
+    xyz: np.array
+        Components of velocity in GSE
+    """
+
+    #Zvalues in FC cooridnates
+    z_fc = -speed
+    #Xvalues in FC coordinates
+    x_fc = speed*np.tan(phi_ang)
+    #Yvalues in FC cooridnates
+    y_fc = speed*np.tan(theta_ang)
+
+
+
+    #for now just assume a switch 2018/08/22, will eventually need atitidue files
+    #Xvalues in GSE coordinates
+    x_gse = z_fc
+
+    #Yvalues in GSE cooridnates
+    y_gse = x_fc
+
+    #Zvalues in GSE cooridnates
+    z_gse = y_fc
+
+    return np.array([x_gse,y_gse,z_gse])
+
 
 def convert_gse_fc(gse_cor,phi_ang,theta_ang):
     """
