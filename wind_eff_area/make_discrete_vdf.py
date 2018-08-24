@@ -74,7 +74,7 @@ def make_discrete_vdf(pls_par,mag_par,pres=0.5,qres=0.5,clip=4.):
     dis_vdf = {'vdf':rawvdf,'pgrid':pgrid,'qgrid':qgrid,'u_gse':u_gse,'b_gse':mag_par,'vdf_func':f}
     return dis_vdf
 
-def make_discrete_vdf_random(dis_vdf,sc_range=0.1,p_sig=10.,q_sig=10.):
+def make_discrete_vdf_random(dis_vdf,sc_range=0.1,p_sig=10.,q_sig=10.,n_p_prob=[0.5,0.5]):
     """
     Returns Discrete Velocity distribution function given a set of input parameters. With random variations 
     in the raw vdf
@@ -88,7 +88,14 @@ def make_discrete_vdf_random(dis_vdf,sc_range=0.1,p_sig=10.,q_sig=10.):
         the normal magnetic field vector ['b_gse'] and a BiVariateSpline interpolation function ['vdf_func'].   
     sc_range: float,optional
         Range to vary the input VDF as a fraction (Default = 0.1)
-        
+    p_sig: float,optional
+        Sigma of the added gaussian in p space in km/s (Default = 10)
+    q_sig: float,optional
+        Sigma of the added gaussian in q space in km/s (Default = 10)
+    n_p_prob: list or np.array, optional
+        The probability of selecting a positive or negative gaussian. The first element is the probability
+        of selecting a gaussian that removes from the vdf, while the second element is the probability of 
+        selecting a gaussian that adds to the vdf. The total probability must sum to 1 (default = [0.5,0.5]).
 
     Returns:
     ---------
@@ -122,8 +129,12 @@ def make_discrete_vdf_random(dis_vdf,sc_range=0.1,p_sig=10.,q_sig=10.):
    
 
     #grab some value on the q,p grid use the input VDF to inform the prior
-    p_grab = float(local_state.choice(pgrid.ravel(),size=1,p=normval.ravel()))
-    q_grab = float(local_state.choice(qgrid.ravel(),size=1,p=normval.ravel()))
+    #normalizing creates preference to cut down middle of velocity distribution 2018/08/23 J. Prchlik
+    p_grab = float(local_state.choice(pgrid.ravel(),size=1))#,p=normval.ravel()))
+    q_grab = float(local_state.choice(qgrid.ravel(),size=1))#,p=normval.ravel()))
+    
+    #try either adding or subtracting
+    a_scale = float(local_state.choice([-1.,1],size=1))
 
 
     #calculate amplitude of vdf at p_grab, q_grab
@@ -138,7 +149,10 @@ def make_discrete_vdf_random(dis_vdf,sc_range=0.1,p_sig=10.,q_sig=10.):
     var = float(local_state.uniform(low=low_off,high=hgh_off,size=1))
 
     #add variation guassian to rawvdf
-    ranvdf = a*np.exp(- ((pgrid-p_grab)/p_sig)**2. - ((qgrid-q_grab)/q_sig)**2.)+rawvdf
+    ranvdf = a_scale*a*np.exp(- ((pgrid-p_grab)/p_sig)**2. - ((qgrid-q_grab)/q_sig)**2.)+rawvdf
+
+    #replace with original values if something is less than 0
+    ranvdf[ranvdf < 0] = rawvdf[ranvdf < 0]
 
     #create an interpolating function for the vdf
     f = RectBivariateSpline(p,q,ranvdf)
@@ -306,7 +320,7 @@ def plot_vdf(dis_vdf):
 
     fig, ax = plt.subplots(figsize=(8,6))
 
-    plotc = ax.pcolormesh(dis_vdf['pgrid'],dis_vdf['qgrid'],np.log10(dis_vdf['vdf']))
+    plotc = ax.pcolormesh(dis_vdf['pgrid'],dis_vdf['qgrid'],np.log10(dis_vdf['vdf']),vmin=-19,vmax=-5)
     cbar = fig.colorbar(plotc)
     cbar.set_label('Normalized Dist. [s$^{3}$cm$^{-3}$km$^{-3}$]',fontsize=18)
 
