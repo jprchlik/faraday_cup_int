@@ -9,6 +9,85 @@ import sympy
 import time
 
 
+def solve_sing_decomp(phi,theta):
+    """
+    Returns singular decomposition matrix solutions to use when computing multi-spacecraft solutions to Vgse, Wper/par, and Np
+
+    Parameters
+    ----------
+    phi: np.arary or float
+        Phi angle values of FC in radians (must be the same length as theta)
+    theta: np.array or float
+        Theta angle values of FC in radians (must be the same length as phi)
+    
+    Returns
+    -------
+        u_svdc: np.array
+            A three column by size of phi (i.e. number of FC) orthoginal array used for decomposition.
+        w_svdc: np.array
+            Three element vector containing the singular values
+        v_svdc: np.array
+            A three column by three row orthoginal array used for decomposition.
+        wp_svdc: np.array
+            A 3x3 diagonal matrix with the diagonal containing values of 1./w_svdc.  
+   
+
+    """
+
+    #number of faraday cup angles
+    ncup = phi.size
+    
+    #number of parameters in decomp
+    npar=3
+    #compute singular value decomp based on Wind observing pipeline
+    #/crater/observatories/wind/code/dvapbimax/sub_bimax_moments.pro
+    #create vector of FC observaitons
+    r_vec = np.zeros((ncup,npar))
+    #Include - sign in phi because of opposite of GSE phi (which is how phi is defined) when FC normal points towards the Sun
+    r_vec[:,0] = np.cos(-phi) * np.cos(theta)
+    r_vec[:,1] = np.sin(-phi) * np.cos(theta)
+    r_vec[:,2] = np.sin(theta)
+    
+    #compute singular value matrix unitary array
+    u_svdc,w_svdc,v_svdc = np.linalg.svd(r_vec,compute_uv=True,full_matrices=False)
+    
+    #create identity matrix for calculating velocity in GSE
+    wp_svdc = (1./w_svdc)*np.identity(npar)
+
+
+    return u_svdc,w_svdc,v_svdc,wp_svdc
+
+def compute_gse_from_fit(phi,theta,fit):
+    """
+    Returns singular decomposition matrix solutions to use when computing multi-spacecraft solutions to Vgse, Wper/par, and Np
+
+    Parameters
+    ----------
+    phi: np.arary or float
+        Phi angle values of FC in radians (must be the same length as theta)
+    theta: np.array or float
+        Theta angle values of FC in radians (must be the same length as phi)
+    fit: float
+        The fit parameter in FC normal coordinates 
+
+    Returns
+    ------
+    best_vgse: np.array
+        Array of best fit coordinates in GSE [x,y,z]     
+    """
+
+    #get decomp matrices
+    u_svdc,w_svdc,v_svdc,wp_svdc = solve_sing_decomp(phi,theta)
+
+    #Get "best fit" values in FC cooridnates
+    best_vfc =  np.dot(np.dot(np.dot(v_svdc.T,wp_svdc),u_svdc.T),fit)
+    #convert to gse cooridnates
+    #best_vgse = convert_fc_gse(best_vfc,np.mean(phi),np.mean(theta))
+    #Is a - sign base on conversion from FC to GSE coordinates when FC normal points towards the sun
+    best_vgse = -1.*best_vfc.copy()
+   
+    return best_vgse
+
 def make_discrete_vdf(pls_par,mag_par,pres=0.5,qres=0.5,clip=4.):
     """
     Returns Discrete Velocity distribution function given a set of input parameters.
@@ -161,48 +240,136 @@ def make_discrete_vdf_random(dis_vdf,sc_range=0.1,p_sig=10.,q_sig=10.,n_p_prob=[
     ran_vdf = {'vdf':ranvdf,'pgrid':pgrid,'qgrid':qgrid,'u_gse':u_gse,'b_gse':mag_par,'vdf_func':f}
     return ran_vdf
 
-def convert_fc_gse(speed,phi_ang,theta_ang):
+def convert_fc_gse(fc_cor,phi_ang,theta_ang):
     """
     Convert GSE coordinates to faraday cup coordinates
 
     Parameters
     ----------
     fc_cor: float
-        Speed measured by the faraday cup
-    
+        3D Measurements made in the FC rest frame  
     phi_ang: float or np.array
         Phi angle between GSE and FC (radians)
-
     theta_ang: float or np.array
         Phi angle between GSE and FC (radians)
-    
+ 
     Returns
     ---------
     xyz: np.array
-        Components of velocity in GSE
+        Components of input in GSE
     """
 
-    #Zvalues in FC cooridnates
-    z_fc = -speed
-    #Xvalues in FC coordinates
-    x_fc = speed*np.tan(phi_ang)
-    #Yvalues in FC cooridnates
-    y_fc = speed*np.tan(theta_ang)
+
+    #Try following /crater/observatories/wind/code/dvapbimax/pol2car.pro
+    #Wrong IDEA HERE.
+    ##r_vec  = np.zeros(3)
+    ##r_vec[0] = np.cos( phi_ang ) * np.cos( theta_ang )
+    ##r_vec[1] = np.sin( phi_ang ) * np.cos( theta_ang )
+    ##r_vec[2] =                  np.sin( theta_ang )
+
+    #Xvalues in fc coordinates
+    ###p_grid_x    = gse_cor[0]*np.sin(phi_ang) + gse_cor[1]*np.cos(phi_ang) # XFC component of B
+
+    ####Yvalues in fc cooridnates
+    ###p_grid_y    =(-(gse_cor[0]*np.cos(phi_ang)*np.sin(theta_ang)) +        # YFC component of B
+    ###              gse_cor[1]*np.sin(phi_ang)*np.sin(theta_ang) +
+    ###              gse_cor[2]*np.cos(theta_ang))
+
+    ####Zvalues in fc cooridnates
+    ###p_grid_z    = (gse_cor[0]*np.cos(phi_ang)*np.cos(theta_ang) -  # ZFC component of B
+    ###              gse_cor[1]*np.sin(phi_ang)*np.cos(theta_ang) +
+    ###              gse_cor[2]*np.sin(theta_ang))
+    #input rotation matrix setup up by convert_gse_fc
+
+    #need to correct for changing coordinate system
+    #rot_mat = rotation_matrix(phi_ang,theta_ang,psi_ang=0.)
+    #convert spherical fc coordinates to GSE coordinates
+    #SWITCHED BACK TO MIKE STEVES FARADAY CUP SOLUTION zptfc_to_xyzgse.pro
+    ###con_mat = np.matrix([[np.sin(theta_ang)*np.cos(phi_ang),np.sin(theta_ang)*np.sin(phi_ang),np.cos(theta_ang)],
+    ###                      [np.cos(theta_ang)*np.cos(phi_ang),np.cos(theta_ang)*np.sin(phi_ang),-np.sin(theta_ang)],
+    ###                      [-np.sin(phi_ang),np.cos(phi_ang),0]])
+    ###          
+
+    ####Invert the matrix 
+    ###inv_con_mat = con_mat.T
 
 
+    ####dot the inverse matrix with the values of theta, phi, and speed
+    ###y_gse,z_gse,x_gse = inv_con_mat.dot(np.array([speed,theta_ang,phi_ang])).tolist()[0]
+    #######apply the coordinate transformation between cup like X,Y,Z and GSE X,Y,Z
+    ###x_gse *=-1.
 
-    #for now just assume a switch 2018/08/22, will eventually need atitidue files
-    #Xvalues in GSE coordinates
-    x_gse = z_fc
+    #####Switched to rotation matrix 2018/08/28 J. Prchlik
+    ##Switched back 2018/09/12 J. Prchlik
+    ##UnSwitched back 2018/09/12 J. Prchlik
+    #############Xvalues in FC cooridnates
+    #####z_fc = -speed
+    #########Yvalues in FC cooridnates
+    #####x_fc = speed*np.tan(theta_ang)
+    #########Zvalues in FC coordinates
+    #####y_fc = speed*np.tan(phi_ang)
 
-    #Yvalues in GSE cooridnates
-    y_gse = x_fc
 
-    #Zvalues in GSE cooridnates
-    z_gse = y_fc
+    ########## #Total velocity
+    ########## v_fc = np.sqrt(np.sum((speed*np.array([-1.,np.tan(phi_ang),np.tan(theta_ang)]))**2.))
+    ########## print(v_fc)
+    #####
+    ##########invert rotation matrix and apply to solution from gaussian fit  
+    #######Brought back 2018/09/12 J. Prchlik
+    ######get rotation matrix
+    rot_mat = rotation_matrix(phi_ang,theta_ang,psi_ang=0.)
+    x_gse,y_gse,z_gse = rot_mat.T.dot(fc_cor).tolist()[0]
+
+    #####get total velocity in GSE coordinates
+    ####v_gse = np.sqrt(np.sum(np.array([x_gse,y_gse,z_gse])**2.))
+
+    ####for now just assume a switch 2018/08/22, will eventually need atitidue files
+    ####Xvalues in GSE coordinates
+    ###x_gse = z_fc
+
+    ####Yvalues in GSE cooridnates
+    ###y_gse = x_fc
+
+    ####Zvalues in GSE cooridnates
+    ###z_gse = y_fc
 
     return np.array([x_gse,y_gse,z_gse])
 
+
+def euler_angles(phi_ang,theta_ang,psi_ang=0.):
+
+
+   #get euler angles
+   a11 = np.cos(psi_ang)*np.cos(phi_ang)-np.cos(theta_ang)*np.sin(phi_ang)*np.sin(psi_ang)
+   a12 = np.cos(psi_ang)*np.sin(phi_ang)+np.cos(theta_ang)*np.cos(phi_ang)*np.sin(psi_ang)
+   a13 = np.sin(psi_ang)*np.sin(theta_ang)
+   a21 = -np.sin(psi_ang)*np.cos(phi_ang)-np.cos(theta_ang)*np.sin(phi_ang)*np.cos(psi_ang)
+   a22 = -np.sin(psi_ang)*np.sin(phi_ang)+np.cos(theta_ang)*np.cos(phi_ang)*np.cos(psi_ang)
+   a23 = np.cos(psi_ang)*np.sin(theta_ang)
+   a31 = np.sin(theta_ang)*np.sin(phi_ang)
+   a32 = -np.sin(theta_ang)*np.cos(phi_ang)
+   a33 = np.cos(theta_ang)
+
+   print(a11,a12,a13)
+   print(a21,a22,a23)
+   print(a31,a32,a33)
+
+   #create rotation matrix
+   rot_mat = np.matrix([[a11,a12,a13],
+                        [a21,a22,a23],
+                        [a31,a32,a33]])
+
+   return rot_mat
+
+def rotation_matrix(phi_ang,theta_ang,psi_ang=0.):
+    #get the stardard euler angles and rotation matrix
+    rot_mat = euler_angles(phi_ang,theta_ang,psi_ang=psi_ang)
+
+    #convert to mike Stevens coordinate system
+    rot_new = rot_mat[[0,2,1]]      #exchange rows 2 and 3
+    rot_new = rot_new.T[[1,0,2]].T  #exchange columns 1 and 2
+    
+    return rot_new
 
 def convert_gse_fc(gse_cor,phi_ang,theta_ang):
     """
