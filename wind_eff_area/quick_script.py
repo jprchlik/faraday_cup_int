@@ -43,7 +43,7 @@ def create_random_vdf(dis_vdf_guess,nproc,n_p_prob):
     #return best dictionary and total error
     return looper[best_ind][1],tot_err[best[0]],dis_cur[best[0]]
 
-def create_random_vdf_multi_fc(fcs,proc,cur_err,dis_vdf_guess,cont,samp=30):
+def create_random_vdf_multi_fc(fcs,proc,cur_err,dis_vdf_guess,cont,samp=30,verbose=False):
     """
     Parameters
     -----------
@@ -57,6 +57,8 @@ def create_random_vdf_multi_fc(fcs,proc,cur_err,dis_vdf_guess,cont,samp=30):
         The number of samples to use in 3D integration
     cont: np.array
         Array of floats to convert shape into current
+    verbose: boolean
+        Print Chi^2 min values when a solution improves the fit
 
     Returns
     -------
@@ -115,16 +117,17 @@ def create_random_vdf_multi_fc(fcs,proc,cur_err,dis_vdf_guess,cont,samp=30):
 
     #return best VDF and total error
     if fcs_err < cur_err:
-        print('STATS for this run')
-        print('Old Err = {0:4.3e}'.format(cur_err))
-        print('New Err = {0:4.3e}'.format(fcs_err))
-        print('X2 Err = {0:4.3e}'.format(np.sum(np.sum((dis_cur - rea_cur)**2.,axis=1))))
-        print('Mean Err = {0:4.3e}'.format(tot_err.mean()))
-        print('Med. Err = {0:4.3e}'.format(np.median(tot_err)))
-        print('Max. Err = {0:4.3e}'.format(np.max(tot_err)))
-        print('Min. Err = {0:4.3e}'.format(np.min(tot_err)))
-        print(tot_err)
-        print('##################')
+        if verbose:
+            print('STATS for this run')
+            print('Old Err = {0:4.3e}'.format(cur_err))
+            print('New Err = {0:4.3e}'.format(fcs_err))
+            print('X2 Err = {0:4.3e}'.format(np.sum(np.sum((dis_cur - rea_cur)**2.,axis=1))))
+            print('Mean Err = {0:4.3e}'.format(tot_err.mean()))
+            print('Med. Err = {0:4.3e}'.format(np.median(tot_err)))
+            print('Max. Err = {0:4.3e}'.format(np.max(tot_err)))
+            print('Min. Err = {0:4.3e}'.format(np.min(tot_err)))
+            print(tot_err)
+            print('##################')
         #updated measured currents
         for j,i in enumerate(index):
             fcs[i]['dis_cur'] = dis_cur[j]
@@ -140,10 +143,12 @@ time_start = time.time()
 
 #set up plasma parameters
 #                    Vx  ,  Vy,  Vz ,Wper,Wpar, Np
-pls_par = np.array([-380., -30., 30., 20., 60., 5.]) 
+pls_par = np.array([-380., -30., 30., 20., 40., 5.]) 
+pls_par = np.array([-580., 100., -10., 10., 80., 15.]) 
+#pls_par = np.array([-480., -100., -80., 20., 50., 25.]) 
 #pls_par = np.array([-380., -100., 50., 30., 10., 50.]) 
 #pls_par = np.array([-880., 100.,-150., 30., 10., 5.]) 
-mag_par = np.array([np.cos(np.radians(75.)), np.sin(np.radians(75.)), 0.]) 
+mag_par = np.array([np.cos(np.radians(75.))*np.cos(.1), np.sin(np.radians(75.))*np.cos(.1), np.sin(.1)]) 
 #mag_par = np.array([1., 0., 0.]) 
 
 #number of sample for integration
@@ -245,7 +250,10 @@ w_angl = big_arr[:,1]
 n_angl = big_arr[:,2]
 
 #density components in  GSE
-#get v_gse solution (Produces the same solution at the Wind spacecraft solution)
+rot_mat = mdv.euler_angles(np.arctan2(mag_par[1],mag_par[0]),np.arcsin(mag_par[2]),psi_ang=0.)
+
+
+#get v_gse solution (Produces the same solution as the Wind spacecraft solution)
 #in /crater/observatories/wind/code/dvapbimax/sub_bimax_moments.pro
 vx,vy,vz =  mdv.compute_gse_from_fit(np.radians(phis),np.radians(thetas),v_angl) #np.dot(np.dot(np.dot(v_svdc.T,wp_svdc),u_svdc.T),v_angl)
 wv =  mdv.compute_gse_from_fit(np.radians(phis),np.radians(thetas),w_angl) #np.dot(np.dot(np.dot(v_svdc.T,wp_svdc),u_svdc.T),v_angl)
@@ -254,16 +262,29 @@ nv =  np.mean(n_angl)
 #compute density
 n = np.sqrt(np.sum(nv**2))
 
-#compute Wpar and Wper
-we = np.abs(wv.dot(mag_par)) #Wper
-wa = np.mean(w_angl) #Wpar
+#Transform wv gse to magnetic field frame
+wmag = np.array(rot_mat.dot(wv))[0]
 
-#print(pls_par)
-#print([vx, vy, vz,wa,we,n])
+#compute Wpar and Wper
+#Use Theta and phi angles between Vgse and Bnorm to get the new vectors
+#we = np.abs(wv.dot(mag_par)) #Wper
+#wa = np.abs(wv.dot(mag_par)) #Wpar
+#we = np.sqrt(np.sum(wv**2)-wa**2)/2. #Wper (factor of 2 comes from assumption of half in each V_perp comp
+wa = np.abs(wmag[0])
+we = np.sqrt(np.sum(wmag[1:]**2))
+
+
 
 #make a discrete VDF with the incorrect parameters but the same grid
 pls_par_bad = np.array([vx, vy, vz,we,wa,n])
-dis_vdf_bad = mdv.make_discrete_vdf(pls_par_bad,mag_par,pres=1.00,qres=1.00,clip=4.)
+
+#Try and update the input Guess for the Wper Wpar parameters before X^2 min
+wa, we =  mdv.find_best_vths(wa,we,pls_par_bad,mag_par,fcs[key]['rea_cur'],fcs[key]['x_meas'])
+
+#update with new Wper and Wpar paraemters
+pls_par_bad = np.array([vx, vy, vz,we,wa,n])
+
+dis_vdf_bad = mdv.make_discrete_vdf(pls_par_bad,mag_par,pres=1.00,qres=1.00,clip=5.)
 #store the initial bad guess 
 dis_vdf_bad_guess = dis_vdf_bad
 #calculate x_meas array for the average with multiple observatories
@@ -271,6 +292,12 @@ dis_vdf_bad_guess = dis_vdf_bad
 x_meas_eff = mdv.make_fc_meas(dis_vdf,fc_spd=grid_v,fc_phi=phi,fc_theta=theta)
 dis_cur_bad_guess = mdv.arb_p_response(fcs[key]['x_meas'],dis_vdf_bad_guess,samp)
 
+
+
+
+#######Give info on best fit versus real solution######
+print(pls_par)
+print(pls_par_bad)
 
 #store the guess 2D measurment by the FC in all fcs dictionaries
 #for key in fcs.keys():
@@ -285,7 +312,7 @@ tot_err = 1e31 #a very large number
 start_loop = time.time()
 #takes about 1000 iterations to converge (~30 minutes), but converged to the wrong solution, mostly overestimated the peak
 #removed to test improving fit
-for i in range(25):
+for i in range(10000):
     #get a new vdf and return if it is the best fit
     #dis_vdf_bad,tot_error,dis_cur = create_random_vdf(dis_vdf_bad,nproc,n_p_prob)
     fcs,tot_err,dis_vdf_bad = create_random_vdf_multi_fc(fcs,nproc,tot_err,dis_vdf_bad,cont)
@@ -352,6 +379,10 @@ ax.set_ylabel('Current')
 ax.legend(loc='best',frameon=False)
 #plt.show()
 
+#Best Fit MC VDF
 mdv.plot_vdf(dis_vdf_bad)
+
+#"REAL" OBSERVATION
+mdv.plot_vdf(dis_vdf)
 
 #mdv.vdf_calc(pls_par[0],pls_par[1],pls_par[2],hold_bfc=dis_vdf['b_gse'],hold_ufc=dis_vdf['u_gse'],hold_qgrid=dis_vdf['qgrid'],hold_pgrid=dis_vdf['pgrid'],hold_vdf=dis_vdf['vdf'],tol=5)
