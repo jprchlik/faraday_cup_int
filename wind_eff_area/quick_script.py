@@ -80,12 +80,15 @@ def create_random_vdf_multi_fc(fcs,proc,cur_err,dis_vdf_guess,cont,samp=30):
     else:
         #Add Guassian 2D perturbation
         #create Vper and Vpar VDF with pertabation from first key because VDF is the same for all FC
-        dis_vdf_bad = mdv.make_discrete_vdf_random(dis_vdf_guess,sc_range=sc_range)
+        dis_vdf_bad = mdv.make_discrete_vdf_random(dis_vdf_guess,sc_range=sc_range,
+                         p_sig=0.1*np.ptp(dis_vdf_guess['pgrid']),q_sig=0.1*np.ptp(dis_vdf_guess['qgrid']))
 
     #loop over all fc in fcs to populate with new VDF guess
     for i,key in enumerate(fcs.keys()):
         #add variation and store which faraday cup you are working with using key
-        looper.append((fcs[key]['x_meas'],dis_vdf_bad,samp,key))
+        inpt_x = fcs[key]['x_meas'].copy()
+        g_vdf  = dis_vdf_bad.copy()
+        looper.append((inpt_x,g_vdf,samp,key))
 
     #process in parallel
     pool = Pool(processes=nproc)
@@ -102,12 +105,12 @@ def create_random_vdf_multi_fc(fcs,proc,cur_err,dis_vdf_guess,cont,samp=30):
     tot_err = np.zeros(dis_cur.shape[0])
     #Get error in each faraday cup
     for j,i in enumerate(index):
-         tot_err[j] = np.sum((cont/fcs[i]['rea_cur'])**2*(dis_cur[j,:] - fcs[i]['rea_cur'])**2)
+         tot_err[j] = np.sum((dis_cur[j,:] - fcs[i]['rea_cur'])**2)
 
     #print(tot_err)
-    #tot_err = np.sum((dis_cur - rea_cur)**2.,axis=1)
     #total error for all fc
-    fcs_err = np.median(tot_err)
+    #fcs_err = np.median(tot_err)
+    fcs_err = np.sqrt(np.sum(tot_err))
     
 
     #return best VDF and total error
@@ -136,8 +139,8 @@ def create_random_vdf_multi_fc(fcs,proc,cur_err,dis_vdf_guess,cont,samp=30):
 time_start = time.time()
 
 #set up plasma parameters
-#                    Vx  ,  Vy,  Vz ,Wpar,Wper, Np
-pls_par = np.array([-380., -30., 30., 60., 20., 5.]) 
+#                    Vx  ,  Vy,  Vz ,Wper,Wpar, Np
+pls_par = np.array([-380., -30., 30., 20., 60., 5.]) 
 #pls_par = np.array([-380., -100., 50., 30., 10., 50.]) 
 #pls_par = np.array([-880., 100.,-150., 30., 10., 5.]) 
 mag_par = np.array([np.cos(np.radians(75.)), np.sin(np.radians(75.)), 0.]) 
@@ -259,7 +262,7 @@ wa = np.mean(w_angl) #Wpar
 #print([vx, vy, vz,wa,we,n])
 
 #make a discrete VDF with the incorrect parameters but the same grid
-pls_par_bad = np.array([vx, vy, vz,wa,we,n])
+pls_par_bad = np.array([vx, vy, vz,we,wa,n])
 dis_vdf_bad = mdv.make_discrete_vdf(pls_par_bad,mag_par,pres=1.00,qres=1.00,clip=4.)
 #store the initial bad guess 
 dis_vdf_bad_guess = dis_vdf_bad
@@ -282,7 +285,7 @@ tot_err = 1e31 #a very large number
 start_loop = time.time()
 #takes about 1000 iterations to converge (~30 minutes), but converged to the wrong solution, mostly overestimated the peak
 #removed to test improving fit
-for i in range(100):
+for i in range(25):
     #get a new vdf and return if it is the best fit
     #dis_vdf_bad,tot_error,dis_cur = create_random_vdf(dis_vdf_bad,nproc,n_p_prob)
     fcs,tot_err,dis_vdf_bad = create_random_vdf_multi_fc(fcs,nproc,tot_err,dis_vdf_bad,cont)
