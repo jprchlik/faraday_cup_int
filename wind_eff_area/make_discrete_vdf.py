@@ -357,9 +357,9 @@ def euler_angles(phi_ang,theta_ang,psi_ang=0.):
    a32 = -np.sin(theta_ang)*np.cos(phi_ang)
    a33 = np.cos(theta_ang)
 
-   print(a11,a12,a13)
-   print(a21,a22,a23)
-   print(a31,a32,a33)
+   ##print(a11,a12,a13)
+   ##print(a21,a22,a23)
+   ##print(a31,a32,a33)
 
    #create rotation matrix
    rot_mat = np.matrix([[a11,a12,a13],
@@ -377,6 +377,97 @@ def rotation_matrix(phi_ang,theta_ang,psi_ang=0.):
     rot_new = rot_new.T[[1,0,2]].T  #exchange columns 1 and 2
     
     return rot_new
+
+
+def find_best_vths(wa,we,pls_par,mag_par,rea_cur,inpt_x,pres=1.00,qres=1.00,warange=3.,werange=3.,wasamp=10,wesamp=4):
+    """
+    Varies the thermal width on one faraday cup to get the best fit initial guess solution. 
+    Based on fit values of components
+   
+    Call
+    ----------
+    wa, we =  mdv.find_best_vths(wa,we,pls_par_bad,rea_cur,inpt_x)
+
+    Parameters
+    ----------
+    wa: float
+        Initial guess of Wpar in km/s
+    we: float 
+        Inital guess of Wper in km/s
+    pls_par: np.array
+        Fit plasma parameters using SVD method in this module
+    mag_par: np.array
+        Observed magnetic field normal vector, which Wpar and Wper are parallel and perpendicular to, respectively
+    rea_cur: np.array
+        A 1D array of the current measured in the FC
+    inpt_x: np.array
+        A 2D array of FC cup measurements (Created x_meas array in this library).
+    warange: float, optional
+        Multiplied by wa to give the range of values to consider (Default = 3)
+    werange: float, optional
+        Multiplied by we to give the range of values to consider (Default = 3)
+    wasamp: int,optional
+        Number of gridspace to use in X^2 fitting in parallel direction (Default = 10)
+    wesamp: int,optional
+        Number of gridspace to use in X^2 fitting in perpendicular direction (Default = 4)
+
+
+    Return
+    --------
+    out_a: float
+        The updated Wpar parameter
+    out_e: float
+        The updated Wper parameter
+
+    """
+    import itertools as it
+
+    #Run through X^2 space to find the best widths
+    was = np.linspace(warange,warange*wa,wasamp)
+    wes = np.linspace(werange,werange*we,wesamp)
+
+    #Append the original fit values 
+    was = np.concatenate((was,np.array([wa])))
+    wes = np.concatenate((wes,np.array([we])))
+
+    #set the output values
+    out_a = wa
+    out_e = we
+
+    #set the init X^2 value
+    chi2 = 1.e30
+
+    #get all combinations of wa's and we's
+    combs = it.product(was,wes)
+    for a,e in combs:
+        #Make a copy of the input plasma array
+        tmp_pls_par = pls_par.copy() 
+        #Update wit the grid of thermal speed parameters
+        tmp_pls_par[3] = e
+        tmp_pls_par[4] = a
+        #Get the 2D velocity distribution in X^2 space
+        vdf_f_chi = make_discrete_vdf(tmp_pls_par,mag_par,pres=1.00,qres=1.00,clip=5.)
+        
+        #integrate over given X (spacecraft) values
+        test_cur = arb_p_response(inpt_x,vdf_f_chi,30)
+
+        #compute Chi2 stat
+        chi2_tmp = np.sum(((test_cur-rea_cur)/rea_cur)**2)
+
+        #update value if new parameter is better
+        if chi2_tmp < chi2: 
+            chi2 = chi2_tmp
+            out_a = a
+            out_e = e
+
+    #return best values over loop
+    return out_a,out_e
+
+       
+     
+
+   
+
 
 def convert_gse_fc(gse_cor,phi_ang,theta_ang):
     """
