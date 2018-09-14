@@ -153,7 +153,7 @@ def make_discrete_vdf(pls_par,mag_par,pres=0.5,qres=0.5,clip=4.):
     dis_vdf = {'vdf':rawvdf,'pgrid':pgrid,'qgrid':qgrid,'u_gse':u_gse,'b_gse':mag_par,'vdf_func':f}
     return dis_vdf
 
-def make_discrete_vdf_random(dis_vdf,sc_range=0.1,p_sig=10.,q_sig=10.,n_p_prob=[0.5,0.5]):
+def make_discrete_vdf_random(dis_vdf,sc_range=0.1,p_sig=5.,q_sig=10.,n_p_prob=[0.5,0.5]):
     """
     Returns Discrete Velocity distribution function given a set of input parameters. With random variations 
     in the raw vdf
@@ -211,6 +211,7 @@ def make_discrete_vdf_random(dis_vdf,sc_range=0.1,p_sig=10.,q_sig=10.,n_p_prob=[
     #normalizing creates preference to cut down middle of velocity distribution 2018/08/23 J. Prchlik
     p_grab = float(local_state.choice(pgrid.ravel(),size=1))#,p=normval.ravel()))
     q_grab = float(local_state.choice(qgrid.ravel(),size=1))#,p=normval.ravel()))
+
     
     #try either adding or subtracting
     a_scale = float(local_state.choice([-1.,1],size=1))
@@ -235,6 +236,12 @@ def make_discrete_vdf_random(dis_vdf,sc_range=0.1,p_sig=10.,q_sig=10.,n_p_prob=[
 
     #create an interpolating function for the vdf
     f = RectBivariateSpline(p,q,ranvdf)
+
+
+    #####
+    #Testing kernal addition 2018/09/14 J. Prchlik
+    ####
+    #ranvdf = a_scale*a*np.exp(- ((pgrid-p_grab)/p_sig)**2. - ((qgrid-q_grab)/q_sig)**2.)
     
     #create dictionary
     ran_vdf = {'vdf':ranvdf,'pgrid':pgrid,'qgrid':qgrid,'u_gse':u_gse,'b_gse':mag_par,'vdf_func':f}
