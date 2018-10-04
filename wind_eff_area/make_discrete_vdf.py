@@ -325,7 +325,10 @@ def convert_fc_gse(fc_cor,phi_ang,theta_ang):
     #######Brought back 2018/09/12 J. Prchlik
     ######get rotation matrix
     rot_mat = rotation_matrix(phi_ang,theta_ang,psi_ang=0.)
-    x_gse,y_gse,z_gse = rot_mat.T.dot(fc_cor).tolist()[0]
+    rot_cor = rotation_matrix(np.pi,-np.pi/2.,psi_ang=0.)
+    #removed Transpose 2018/10/03 J. Prchlik because of changed rotation matrix definition
+    #convert back to Right handed definition in GSE coordinates
+    x_gse,y_gse,z_gse = rot_mat.dot(rot_cor).dot(fc_cor)
 
     #####get total velocity in GSE coordinates
     ####v_gse = np.sqrt(np.sum(np.array([x_gse,y_gse,z_gse])**2.))
@@ -347,14 +350,24 @@ def euler_angles(phi_ang,theta_ang,psi_ang=0.):
 
 
    #get euler angles
-   a11 = np.cos(psi_ang)*np.cos(phi_ang)-np.cos(theta_ang)*np.sin(phi_ang)*np.sin(psi_ang)
-   a12 = np.cos(psi_ang)*np.sin(phi_ang)+np.cos(theta_ang)*np.cos(phi_ang)*np.sin(psi_ang)
-   a13 = np.sin(psi_ang)*np.sin(theta_ang)
-   a21 = -np.sin(psi_ang)*np.cos(phi_ang)-np.cos(theta_ang)*np.sin(phi_ang)*np.cos(psi_ang)
-   a22 = -np.sin(psi_ang)*np.sin(phi_ang)+np.cos(theta_ang)*np.cos(phi_ang)*np.cos(psi_ang)
-   a23 = np.cos(psi_ang)*np.sin(theta_ang)
-   a31 = np.sin(theta_ang)*np.sin(phi_ang)
-   a32 = -np.sin(theta_ang)*np.cos(phi_ang)
+   #updating euler angles 2018/10/04 J. Prchlik
+   ####a11 = np.cos(psi_ang)*np.cos(phi_ang)-np.cos(theta_ang)*np.sin(phi_ang)*np.sin(psi_ang)
+   ####a12 = np.cos(psi_ang)*np.sin(phi_ang)+np.cos(theta_ang)*np.cos(phi_ang)*np.sin(psi_ang)
+   ####a13 = np.sin(psi_ang)*np.sin(theta_ang)
+   ####a21 = -np.sin(psi_ang)*np.cos(phi_ang)-np.cos(theta_ang)*np.sin(phi_ang)*np.cos(psi_ang)
+   ####a22 = -np.sin(psi_ang)*np.sin(phi_ang)+np.cos(theta_ang)*np.cos(phi_ang)*np.cos(psi_ang)
+   ####a23 = np.cos(psi_ang)*np.sin(theta_ang)
+   ####a31 = np.sin(theta_ang)*np.sin(phi_ang)
+   ####a32 = -np.sin(theta_ang)*np.cos(phi_ang)
+   ####a33 = np.cos(theta_ang)
+   a11 = np.cos(psi_ang)*np.cos(theta_ang)*np.cos(phi_ang)-np.sin(psi_ang)*np.sin(phi_ang)
+   a12 = np.cos(psi_ang)*np.cos(theta_ang)*np.sin(phi_ang)+np.sin(psi_ang)*np.cos(phi_ang)
+   a13 = -np.cos(psi_ang)*np.sin(theta_ang)
+   a21 = -np.sin(psi_ang)*np.cos(theta_ang)*np.cos(phi_ang)-np.cos(psi_ang)*np.sin(phi_ang)
+   a22 = -np.sin(psi_ang)*np.cos(theta_ang)*np.sin(phi_ang)+np.cos(psi_ang)*np.cos(phi_ang)
+   a23 = np.sin(psi_ang)*np.sin(theta_ang)
+   a31 = np.sin(theta_ang)*np.cos(phi_ang)
+   a32 = np.sin(theta_ang)*np.sin(phi_ang)
    a33 = np.cos(theta_ang)
 
    ##print(a11,a12,a13)
@@ -362,7 +375,7 @@ def euler_angles(phi_ang,theta_ang,psi_ang=0.):
    ##print(a31,a32,a33)
 
    #create rotation matrix
-   rot_mat = np.matrix([[a11,a12,a13],
+   rot_mat = np.array([[a11,a12,a13],
                         [a21,a22,a23],
                         [a31,a32,a33]])
 
@@ -373,8 +386,10 @@ def rotation_matrix(phi_ang,theta_ang,psi_ang=0.):
     rot_mat = euler_angles(phi_ang,theta_ang,psi_ang=psi_ang)
 
     #convert to mike Stevens coordinate system
-    rot_new = rot_mat[[0,2,1]]      #exchange rows 2 and 3
-    rot_new = rot_new.T[[1,0,2]].T  #exchange columns 1 and 2
+    #removed 2018/10/03
+    ##rot_new = rot_mat[[0,2,1]]      #exchange rows 2 and 3
+    ##rot_new = rot_new.T[[1,0,2]].T  #exchange columns 1 and 2
+    rot_new = rot_mat
     
     return rot_new
 
@@ -471,7 +486,8 @@ def find_best_vths(wa,we,pls_par,mag_par,rea_cur,inpt_x,pres=1.00,qres=1.00,wara
 
 def convert_gse_fc(gse_cor,phi_ang,theta_ang):
     """
-    Convert GSE coordinates to faraday cup coordinates
+    Convert GSE coordinates to faraday cup coordinates. Faraday cup coordiantes have positive Z pointing toward the receiving cup normal
+    and positive X in the upperward direction in a right handed coordinate system.
 
     Parameters
     ----------
@@ -491,23 +507,12 @@ def convert_gse_fc(gse_cor,phi_ang,theta_ang):
     """
 
 
-    #Xvalues in fc coordinates
-    p_grid_x    = gse_cor[0]*np.sin(phi_ang) + gse_cor[1]*np.cos(phi_ang) # XFC component of B
+    #switched to simplier euler angle transformation 2018/10/03 J. Prchlik
+    rot_mat = euler_angles(phi_ang,theta_ang)
+    rot_cor = euler_angles(np.pi,-np.pi/2.)
+    p_grid  = rot_mat.dot(rot_cor).T.dot(gse_cor)
 
-    #Yvalues in fc cooridnates
-    p_grid_y    =(-(gse_cor[0]*np.cos(phi_ang)*np.sin(theta_ang)) +        # YFC component of B
-                  gse_cor[1]*np.sin(phi_ang)*np.sin(theta_ang) + 
-                  gse_cor[2]*np.cos(theta_ang))
-
-    #Zvalues in fc cooridnates
-    p_grid_z    = (gse_cor[0]*np.cos(phi_ang)*np.cos(theta_ang) -  # ZFC component of B
-                  gse_cor[1]*np.sin(phi_ang)*np.cos(theta_ang) + 
-                  gse_cor[2]*np.sin(theta_ang))
-
-
-    #output in rows of X, Y , Z
-    p_grid = np.vstack([p_grid_x,p_grid_y,p_grid_z])
-
+    
 
     return p_grid
 
@@ -535,9 +540,9 @@ def make_fc_meas(dis_vdf,fc_spd=np.arange(300,600,15),fc_phi=-15.,fc_theta=-15):
     x_meas: np.array
                x[0,:]          v_window  [km/s] 
                x[1,:]          v_delta   [km/s] 
-               x[2,:]          phi_ang [rad] 
-               x[3,:]          theta_ang [rad] 
-               x[4,:]      b in FC "x"
+               x[2,:]          phi_ang (yaw) [rad] 
+               x[3,:]          theta_ang (pitch) [rad] 
+               x[4,:]      b in FC "x" pointing upwards
                x[5,:]      b in FC "y"
                x[6,:]      b in FC "z" normal to cup
     """
@@ -847,6 +852,7 @@ def vdf_calc(vz,vx,vy,hold_bfc=[1,1,1],hold_ufc=[1,1,1],hold_ifunc=lambda p,q: p
 #COMMON measurement_params, hold_vdf, hold_pgrid, hold_qgrid, hold_ufc, hold_bfc
 
 
+    #Use the magnitude of the input vector
     vz *= -1
 
     #break up velocity and magnetic field components
