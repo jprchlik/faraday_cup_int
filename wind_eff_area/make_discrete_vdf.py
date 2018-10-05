@@ -98,7 +98,8 @@ def make_discrete_vdf(pls_par,mag_par,pres=0.5,qres=0.5,clip=4.):
         A numpy array of plasma parameters in the following order: Vx,Vy,Vz,Wper,Wpar,Np.
         That is the proton velocity in the solar wind in X GSE, Y GSE, and Z GSE in km/s,
         followed by the thermal width perpendicular and parallel to the magnetic field normal,
-        and finally the proton number density in cm^{-3}
+        and finally the proton number density in cm^{-3}. Wper and Wpar are assumed to be 
+        Sigma values not Full Width at half maximum.
     
     mag_par: np.array
         A numpy array of the magnetic field normal in the following order : bx, by, and bz.
@@ -127,8 +128,12 @@ def make_discrete_vdf(pls_par,mag_par,pres=0.5,qres=0.5,clip=4.):
     wpar  = pls_par[4]
     n     = pls_par[5]
 
+
+    #convert FWHM to sigma
+    ftos = 1./(2.*np.sqrt(2.*np.log(2.)))
     
-    
+    print('input parameters')
+    print(wper,wpar) 
     #distribution of velocities in the parallel direction
     p = np.arange(-wpar*clip,(wpar*clip)+pres,pres)
     #distribution of velocities in the perpendicular direction
@@ -140,11 +145,11 @@ def make_discrete_vdf(pls_par,mag_par,pres=0.5,qres=0.5,clip=4.):
     pgrid, qgrid = pgrid.T,qgrid.T
     
     #Get VDF constance
-    a = n/(np.sqrt(np.pi**3.)*(wpar*wper**2.)) # 1/cm^3 * s^3 /km^3 
+    #Added addition 2^{3/2)  based on definition 2018/10/05 J. Prchlik
+    a = n/(np.sqrt((np.pi)**3.)*(wpar*wper**2.)) # 1/cm^3 * s^3 /km^3 
     
-    #compute the raw vdf
+    #compute the raw vdf (ftos comes from transformation from FWHM to 2Sigma)
     rawvdf = a*np.exp(- (pgrid/wpar)**2. - (qgrid/wper)**2.)
-
 
     #create an interpolating function for the vdf
     f = RectBivariateSpline(p,q,rawvdf)
@@ -539,8 +544,9 @@ def arb_p_response(x_meas,dis_vdf,samp):
     dis_vdf: dictionary
          A dictionary returned from make_discrete_vdf
 
-    samp: int, optional
-        Number of samples to use when doing the Monte Carlo Integration (Default = 10000)
+    samp: int
+        Number of samples to use when doing the MidPointIntegration. 30 Seems to be a good mixture
+        of rapid integration and high precision. 
 
     Returns:
     --------
@@ -560,6 +566,7 @@ def arb_p_response(x_meas,dis_vdf,samp):
     fc_state_vhi = x_meas[0,:]+.5*x_meas[1,:] 
     fc_state_phi = x_meas[2,:]
     fc_state_tht = x_meas[3,:]
+ 
     
 
     #get faraday cup measurement at each FC measurement velocity
@@ -651,7 +658,7 @@ def fc_meas(vdf,fc,fov_ang=45.,sc ='wind',samp=10000):
 
 
 #Note unlike IDL PYTHON expects VZ to be last not first
-def int_3d(vx,vy,vz,spacecraft='wind',ufc=[1],bfc=[1],ifunc=lambda p,q: p*q): 
+def int_3d(vy,vx,vz,spacecraft='wind',ufc=[1],bfc=[1],ifunc=lambda p,q: p*q): 
     """
     3D function to integrate. Vz is defined to be normal to the cup sensor
 
@@ -664,14 +671,14 @@ def int_3d(vx,vy,vz,spacecraft='wind',ufc=[1],bfc=[1],ifunc=lambda p,q: p*q):
     vy: np.array                                                                 
         The velocity of the solar wind in the y direction with respect to the FC in km/s
     bfc: np.array
-        An array of magnetic field vectors in the faraday cup corrdinates [Bz,Bx,By]
-    ufc: np.array
-        An array of plasma velocity vectors in the faraday cup corrdinates [Vz,Vx,Vy]
+        An array of magnetic field vectors in the faraday cup corrdinates  [Bx,By,Bz]
+    ufc: np.array                                                                   
+        An array of plasma velocity vectors in the faraday cup corrdinates [Vx,Vy,Vz]
     hold_ifunc: ND interpolation function
         Function of a RectBivariateSpline (https://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.RectBivariateSpline.html).
         Doing the interpolation this way is much faster than reinterpolating from a grid everytime as early version of the code required.
     """
-    e =  -1.60217646e-19   # coulombs
+    e =  1.60217646e-19   # coulombs
 
 ##3    eff_area_inp = partial(eff_area,spacecraft=spacecraft)
 ##3    vdf_inp = partial(vdf_calc,hold_bfc=bfc,hold_ufc=ufc,
@@ -680,17 +687,25 @@ def int_3d(vx,vy,vz,spacecraft='wind',ufc=[1],bfc=[1],ifunc=lambda p,q: p*q):
 ##3
 
     #Calculate effective area
-    test_area = eff_area(vz,vx,vy,spacecraft=spacecraft)
+    test_area = eff_area(vx,vy,vz,spacecraft=spacecraft)
     #if ((test_area < 1.e-16) | (not np.isfinite(test_area))):
     #    return 0
 
 
     #Get observed VDF
-    test_vdf  =  vdf_calc(vz,vx,vy,hold_bfc=bfc,hold_ufc=ufc,
+    test_vdf  =  vdf_calc(vx,vy,-vz,hold_bfc=bfc,hold_ufc=ufc,
                       hold_ifunc=ifunc)
     #if ((test_vdf < 1.e-16) | (not np.isfinite(test_vdf))):
     #    return 0
-
+#####    print('TEST INT')
+#####    print(min(test_vdf))
+#####    print(min(test_area))
+#####    print(min(vz),max(vz))
+#####    print(min(vx),max(vx))
+#####    print(min(vy),max(vy))
+#####    print(e)
+#####    print('TEST INT')
+#####
     #print('############')
     #print('EFF AREA')
     #print(test_area)
@@ -706,7 +721,7 @@ def int_3d(vx,vy,vz,spacecraft='wind',ufc=[1],bfc=[1],ifunc=lambda p,q: p*q):
     return val
 
 
-def eff_area(vz,vx,vy,spacecraft='wind'):
+def eff_area(vx,vy,vz,spacecraft='wind'):
     """
     Calculates effective area for a given set of velocities
 
@@ -726,7 +741,7 @@ def eff_area(vz,vx,vy,spacecraft='wind'):
     """
 
     #get angle onto the cup
-    alpha = np.degrees(np.arctan2(np.sqrt(vy**2 + vx**2), vz))
+    alpha = np.degrees(np.arctan2(np.sqrt(vy**2 + vx**2),vz))
 
     #Get effective area for give spacecraft
     eff_area = return_space_craft_ef(spacecraft)
@@ -745,22 +760,22 @@ def eff_area(vz,vx,vy,spacecraft='wind'):
 # for a VDF that is defined on a grid, get an interpolate
 # at any desired location in phase space
 #
-def vdf_calc(vz,vx,vy,hold_bfc=[1,1,1],hold_ufc=[1,1,1],hold_ifunc=lambda p,q: p*q):
+def vdf_calc(vx,vy,vz,hold_bfc=[1,1,1],hold_ufc=[1,1,1],hold_ifunc=lambda p,q: p*q):
     """
     Calculates measured VDF
 
     Parameters
     ----------
-    vz: np.array
-        The velocity of the solar wind normal FC in km/s
     vx: np.array
         The velocity of the solar wind in the x direction with respect to the FC in km/s
     vy: np.array                                                                 
         The velocity of the solar wind in the y direction with respect to the FC in km/s
+    vz: np.array
+        The velocity of the solar wind normal FC in km/s
     hold_bfc: np.array
-        An array of magnetic field vectors in the faraday cup corrdinates [Bz,Bx,By]
-    hold_ufc: np.array
-        An array of plasma velocity vectors in the faraday cup corrdinates [Vz,Vx,Vy]
+        An array of magnetic field vectors in the faraday cup corrdinates  [Bx,By,Bz]
+    hold_ufc: np.array                                                              
+        An array of plasma velocity vectors in the faraday cup corrdinates [Vx,Vy,Vz]
     hold_ifunc: ND interpolation function
         Function of a RectBivariateSpline (https://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.RectBivariateSpline.html).
         Doing the interpolation this way is much faster than reinterpolating from a grid everytime as early version of the code required.
@@ -775,9 +790,10 @@ def vdf_calc(vz,vx,vy,hold_bfc=[1,1,1],hold_ufc=[1,1,1],hold_ifunc=lambda p,q: p
 
 
     #Use the magnitude of the input vector
-    vz *= -1
+    #vz *= -1
 
     #break up velocity and magnetic field components
+    #These coordinates are in FC coordiante system 
     bx = hold_bfc[0]
     by = hold_bfc[1]
     bz = hold_bfc[2]
@@ -792,8 +808,18 @@ def vdf_calc(vz,vx,vy,hold_bfc=[1,1,1],hold_ufc=[1,1,1],hold_ifunc=lambda p,q: p
     #print('XXXXXXXXXXXXXXXXXXXXXXX')
     #print(hold_ufc)
     #print((vx-ux),(vy-uy),(vz-uz))
+    #Convert FC coordinates to Wper and Wpar coordinates
+    #print(vx,vy,vz)
     p = (vx-ux)*bx + (vy-uy)*by + (vz-uz)*bz
+    #print(max(p),min(p))
     q = np.sqrt( (vx-ux)**2 + (vy-uy)**2 + (vz-uz)**2 - p**2)
+    ###print('start ps and qs')
+    ######print(ux,uy,uz)
+    ######print(bx,by,bz)
+    ###print(p.min(),q.min())
+    ###print(p.mean(),q.mean())
+    ###print(p.max(),q.max())
+    ###print('end ps and qs')
 
 
 
@@ -870,7 +896,7 @@ def p_bimax_response(x_meas, p_solpar):
     # using the approximation that the flow is all coming in at the bulk
     # flow angle (i.e. the cold plasma approximation that the the thermal
     # speed is negligible)
-    a_eff_p = np.double(eff_area(-vzmax, vxmax, vymax))
+    a_eff_p = np.double(eff_area( vxmax, vymax,-vzmax))
     
     # calculate modified gaussian integral of v*f(v). Limits in
     # transverse directions are infinity, i.e. approximate that the whole distribution is
