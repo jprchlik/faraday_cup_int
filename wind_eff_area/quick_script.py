@@ -15,6 +15,24 @@ def proc_wrap(arg):
     return [mdv.arb_p_response(*arg[:-1]),arg[-1]]
 
 def create_random_vdf(dis_vdf_guess,nproc,n_p_prob):
+    """
+    Parameters
+    -----------
+    dis_vdf_guess: np.array
+        The current best fit 2D VDF guess
+    proc : int
+        Number of processors to run on
+    n_p_prob: np.array
+        A two element array specifying probability the gaussian kernal is positive or negative
+    Returns
+    -------
+        looper[best_ind][1],tot_err[best[0]],dis_cur[best[0]]
+  
+    Usage
+    ------
+        create_random_vdf_multi_fc(proc,cur_err)
+    """
+   
     global rea_cur,x_meas
     looper = [(x_meas,dis_vdf_guess,samp,0)]
     for i in range(1,nproc*2+1):
@@ -82,8 +100,9 @@ def create_random_vdf_multi_fc(fcs,proc,cur_err,dis_vdf_guess,cont,samp=30,verbo
     else:
         #Add Guassian 2D perturbation
         #create Vper and Vpar VDF with pertabation from first key because VDF is the same for all FC
+        #use 3% of total width for Gaussian kernals instead of 10% 2018/09/19 J. Prchlik
         dis_vdf_bad = mdv.make_discrete_vdf_random(dis_vdf_guess,sc_range=sc_range,
-                         p_sig=0.1*np.ptp(dis_vdf_guess['pgrid']),q_sig=0.1*np.ptp(dis_vdf_guess['qgrid']))
+                         p_sig=0.03*np.ptp(dis_vdf_guess['pgrid']),q_sig=0.03*np.ptp(dis_vdf_guess['qgrid']))
 
     #loop over all fc in fcs to populate with new VDF guess
     for i,key in enumerate(fcs.keys()):
@@ -152,7 +171,7 @@ mag_par = np.array([np.cos(np.radians(75.))*np.cos(.1), np.sin(np.radians(75.))*
 #mag_par = np.array([1., 0., 0.]) 
 
 #number of sample for integration
-samp = 3e1
+samp = 5e1
 #make a discrete VDF
 dis_vdf = mdv.make_discrete_vdf(pls_par,mag_par,pres=1.00,qres=1.00,clip=4.)
 
@@ -176,7 +195,9 @@ theta = float(thetas[-1])
 
 #report some measurements
 #veloity grid
-grid_v = np.arange(300,600,20)
+#########################################
+######################################
+#grid_v = np.arange(450,790,20)
 v_mag = np.sqrt(np.sum(pls_par**2))
 grid_v = np.arange(v_mag-150,v_mag+150,20)
 #get effective area of wind and other coversion parameters
@@ -263,7 +284,7 @@ nv =  np.mean(n_angl)
 n = np.sqrt(np.sum(nv**2))
 
 #Transform wv gse to magnetic field frame
-wmag = np.array(rot_mat.dot(wv))[0]
+wmag = rot_mat.dot(wv)
 
 #compute Wpar and Wper
 #Use Theta and phi angles between Vgse and Bnorm to get the new vectors
@@ -292,6 +313,10 @@ dis_vdf_bad_guess = dis_vdf_bad
 x_meas_eff = mdv.make_fc_meas(dis_vdf,fc_spd=grid_v,fc_phi=phi,fc_theta=theta)
 dis_cur_bad_guess = mdv.arb_p_response(fcs[key]['x_meas'],dis_vdf_bad_guess,samp)
 
+#Get the initial distribution based on input parameters 2018/09/19 J. Prchlik 
+for i in fcs.keys():
+    fcs[i]['init_guess'] = mdv.arb_p_response(fcs[i]['x_meas'],dis_vdf_bad_guess,samp)
+
 
 
 
@@ -312,7 +337,7 @@ tot_err = 1e31 #a very large number
 start_loop = time.time()
 #takes about 1000 iterations to converge (~30 minutes), but converged to the wrong solution, mostly overestimated the peak
 #removed to test improving fit
-for i in range(10000):
+for i in range(1):
     #get a new vdf and return if it is the best fit
     #dis_vdf_bad,tot_error,dis_cur = create_random_vdf(dis_vdf_bad,nproc,n_p_prob)
     fcs,tot_err,dis_vdf_bad = create_random_vdf_multi_fc(fcs,nproc,tot_err,dis_vdf_bad,cont)
@@ -347,9 +372,14 @@ idl_cur = np.array([4.5560070e-11,7.7672213e-11,1.1308081e-10,1.4061885e-10,1.49
                    ,1.4816679e-15,2.0473478e-16,2.4185986e-17,2.4426542e-18])
 
 
+
+#create a square as possible plot
+nrows = int(np.sqrt(len(fcs.keys())))
+ncols = len(fcs.keys())/nrows
+#add an extra column if needed
+if nrows*ncols < len(fcs.keys()): 
+    ncols += 1
    
-#create figure to plot
-fig, ax = plt.subplots()
 #ax.plot(grid_v,col_cur*cont,'--r',label='Cold',linewidth=3)
 
 #Get the average current and plot
@@ -364,19 +394,30 @@ print('Cold Case Current to Integrated Current')
 #ax.plot(grid_v,ave_cur,label='Midpoint Intgration',linewidth=3,color='black')
 #ax.errorbar(grid_v,ave_cur,yerr=std_cur,label=None,color='black',linewidth=3)
 
-#removed to test improving Gaussian fit
-ax.plot(grid_v,fcs[key]['dis_cur'].ravel()*cont,label='Best MC',color='black',linewidth=3)
-ax.plot(grid_v,fcs[key]['rea_cur'].ravel()*cont,'-.b',label='Input',linewidth=3)
-#ax.plot(grid_v,rea_cur.ravel()*cont,'-.b',label='Input',linewidth=3)
-ax.plot(grid_v,dis_cur_bad_guess.ravel()*cont,':',color='purple',label='Init. Guess',linewidth=3)
-#ax.plot(grid_v, gaus(grid_v,*popt),'--',marker='o',label='Gauss Fit',linewidth=3)
-
-
-fancy_plot(ax)
-#ax.set_yscale('log')
-ax.set_xlabel('Speed [km/s]')
-ax.set_ylabel('Current')
-ax.legend(loc='best',frameon=False)
+#create figure to plot
+fig, axs = plt.subplots(ncols=ncols,nrows=nrows,sharex=True,sharey=True,figsize=(3*ncols,3*nrows))
+fig.subplots_adjust(wspace=0.01,hspace=0.01)
+counter = 0
+for key,ax in zip(fcs.keys(),axs.ravel()):
+    #removed to test improving Gaussian fit
+    ax.plot(grid_v,fcs[key]['dis_cur'].ravel()*cont,label='Best MC',color='black',linewidth=3)
+    ax.plot(grid_v,fcs[key]['rea_cur'].ravel()*cont,'-.b',label='Input',linewidth=3)
+    #ax.plot(grid_v,rea_cur.ravel()*cont,'-.b',label='Input',linewidth=3)
+    ax.plot(grid_v,fcs[key]['init_guess'].ravel()*cont,':',color='purple',label='Init. Guess',linewidth=3)
+    ax.text(0.05,0.8,'$\Phi$={0:2.1f}$^\circ$\n$\Theta$={1:2.1f}$^\circ$'.format(*np.degrees(fcs[key]['x_meas'][[2,3],0])),transform=ax.transAxes)
+    #ax.plot(grid_v, gaus(grid_v,*popt),'--',marker='o',label='Gauss Fit',linewidth=3)
+    fancy_plot(ax)
+    #ax.set_yscale('log')
+    #only plot x-label if in the last row
+    if counter >= (nrows-1)*(ncols):
+       ax.set_xlabel('Speed [km/s]')
+    #set ylabel on the left edge
+    if np.isclose(float(counter)/ncols - int(counter/ncols),0):
+        ax.set_ylabel('p/cm$^{-3}$/(km/s)')
+    #put legend only on the first plot
+    if counter == 0:
+        ax.legend(loc='best',frameon=False)
+    counter += 1
 #plt.show()
 
 #Best Fit MC VDF
