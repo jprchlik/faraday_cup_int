@@ -29,12 +29,12 @@ def create_mid_point_arr(float z_lo,float z_hi,object x_lo,object x_hi,object y_
              for k in range(samp):
                  #store values in array
                  #arr[l,:] = np.array([y,h_y,x,h_x,z,h_z])
-                 arr[l,0] = y
-                 arr[l,1] = h_y
+                 arr[l,0] = z
+                 arr[l,1] = h_z
                  arr[l,2] = x
                  arr[l,3] = h_x
-                 arr[l,4] = z
-                 arr[l,5] = h_z
+                 arr[l,4] = y
+                 arr[l,5] = h_y
                  l += 1 #increment array index                 
                  y += h_y
              #increment x
