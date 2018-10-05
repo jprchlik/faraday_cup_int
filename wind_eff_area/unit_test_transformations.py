@@ -149,6 +149,16 @@ def pls_par_1():
     pls_par = np.array([-380., -130., 30., 10., 40., 5.])
     return pls_par
 
+def pls_par_2():
+    """
+    One set of plasma parameters for test in FC measurements 
+    """
+
+    #                    Vx  ,  Vy,  Vz ,Wper,Wpar, Np
+    pls_par = np.array([-550., -30., 10., 20., 80., 50.])
+    return pls_par
+
+
 def calc_cont(grid_v):
     """
     Calculate constant to change from measured current to particles per velocity bin
@@ -174,7 +184,7 @@ def calc_cont(grid_v):
     return cont
 
 
-def test_pars_one_fc(plot=False):
+def test_pars_one_fc_1(plot=False):
     """
     Test returns plasma parameters when you have the solar wind coming right down the barrel of the FC
     """
@@ -252,6 +262,62 @@ def test_pars_one_fc(plot=False):
     if plot:
         plt.show()
 
+def test_pars_one_fc_2(plot=False):
+    """
+    Test returns plasma parameters when you have the solar wind coming right down the barrel of the FC
+    """
+
+    #get a set of plasma parameters
+    pls_par = pls_par_2()
+
+    #Use a random magnetic field vector follows plasma vector
+    mag_par =  [np.cos(np.degrees(75.)), np.sin(np.degrees(75.)), 0.]# chosen arbitrarily
+
+    #get phi and theta for particular input values
+    phi,theta = -10,4
+    print(phi,theta)
+
+    #number of sample for integration aming for 2 part in 1,000
+    samp = 4.5e1
+    #make a discrete VDF
+    dis_vdf = mdv.make_discrete_vdf(pls_par,mag_par,pres=1.00,qres=1.00,clip=4.)
+
+    #measurement velocity grid
+    dv = 15
+    grid_v = np.arange(470,800,dv)
+
+    #Constant to convert current to particles
+    cont = calc_cont(grid_v)
+
+    #calculate x_meas array
+    #phi and theta should be input in degrees
+    x_meas = mdv.make_fc_meas(dis_vdf,fc_spd=grid_v,fc_phi=phi,fc_theta=theta)
+
+    #compute the observed current in the instrument
+    rea_cur = mdv.arb_p_response(x_meas,dis_vdf,samp)
+
+
+    #compute Using a cold current assumption which should be good considering the FC cup is looking down the propaging vector
+    col_cur = mdv.p_bimax_response(x_meas,np.concatenate([pls_par,mag_par]))
+
+    fig, ax = plt.subplots()
+    ax.plot(grid_v,rea_cur.ravel()*cont,'-.b',label='Input',linewidth=3)
+    ax.plot(grid_v,col_cur*cont,'--r',label='Cold',linewidth=3)
+    #ax.plot(grid_v, gaus(grid_v,*popt),'--',marker='o',label='Gauss Fit',linewidth=3)
+    #ax.plot(grid_v,init_guess.ravel()*cont,':',color='purple',label='Init. Guess',linewidth=3)
+
+
+    ax.set_xlabel('Speed [km/s]')
+    ax.set_ylabel('p/cm$^{-3}$/(km/s)')
+
+    if plot:
+        plt.show()
+
+    err_val = np.sqrt(np.sum((rea_cur-col_cur)**2))/np.sum(col_cur)
+    print(err_val)
+    #Test error value is within tolerance
+    assert err_val < 2e-3
+
 if __name__ == '__main__':
     """
     Run a series of test that make sure all coordinate transformation work
@@ -267,4 +333,5 @@ if __name__ == '__main__':
 
 
     #test you get reasonable answers when you shove everything right down on FC
-    test_pars_one_fc(plot=False)
+    test_pars_one_fc_1(plot=False)
+    test_pars_one_fc_2(plot=True)
