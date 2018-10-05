@@ -326,9 +326,12 @@ def mp_trip_cython(int_3d,z_lo,z_hi,x_lo,x_hi,y_lo,y_hi,args=(),samp=70):
     #use Cython function to create array for loop
     arr = mpl.create_mid_point_arr(z_lo,z_hi,x_lo, x_hi, y_lo, y_hi,samp)
     #time_mp_s = time.time()
+    #Outputs in the following coordinates
+    #Z,dZ,X,dX,Y,dY
     arr = np.asarray(arr)
     #compute the integral using midpoint integration
-    area_cal = np.sum(int_3d(arr[:,0],arr[:,2],arr[:,4],*args)*np.prod(arr[:,1::2],axis=1))
+    #Use the same Y,X,Z as used by scipy tplquad
+    area_cal = np.sum(int_3d(arr[:,4],arr[:,2],arr[:,0],*args)*np.prod(arr[:,1::2],axis=1))
     #time_mp_e = time.time()
     #print('Time to run Int. Calc. {0:2.1f}'.format(time_mp_e-time_mp_s))
 
