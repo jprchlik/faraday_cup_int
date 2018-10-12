@@ -640,6 +640,7 @@ def arb_p_response_dyn_samp(x_meas,dis_vdf,z_peak,
         theta_ang = fc_state_tht[i]
         
         #get sampling for current bin
+        samp = samp_func(fc_vlo,fc_vhi,z_peak)
 
         inp = np.array([fc_vlo,fc_vhi,phi_ang,theta_ang])
 
