@@ -88,7 +88,7 @@ def compute_gse_from_fit(phi,theta,fit):
    
     return best_vgse
 
-def make_discrete_vdf(pls_par,mag_par,pres=0.5,qres=0.5,clip=4.):
+def make_discrete_vdf(pls_par,mag_par,pres=0.5,qres=0.5,clip=300.):
     """
     Returns Discrete Velocity distribution function given a set of input parameters.
 
@@ -112,7 +112,7 @@ def make_discrete_vdf(pls_par,mag_par,pres=0.5,qres=0.5,clip=4.):
         The resolution of the instrument in the perpendicular direction in km/s (Default = 0.5).
 
     clip: float, optional
-        The measurement width beyond input velocity width as a sigma value (Default = 4). 
+        The measurement width in vper and vpar (Default = 300.). 
 
     Returns:
     ---------
@@ -133,9 +133,13 @@ def make_discrete_vdf(pls_par,mag_par,pres=0.5,qres=0.5,clip=4.):
     ftos = 1./(2.*np.sqrt(2.*np.log(2.)))
     
     #distribution of velocities in the parallel direction
-    p = np.arange(-wpar*clip,(wpar*clip)+pres,pres)
+    #p = np.arange(-wpar*clip,(wpar*clip)+pres,pres)
+    #updated to fixed range 2018/10/12 J. Prchlik
+    p = np.arange(-clip/2,clip/2+pres,pres)
     #distribution of velocities in the perpendicular direction
-    q = np.arange(0,(wper*clip)+qres,qres)
+    #q = np.arange(0,(wper*clip)+qres,qres)
+    #updated to fixed range 2018/10/12 J. Prchlik
+    q = np.arange(0,clip+qres,qres)
     
     
     #created 2D grid of velocities in the X and y direction
@@ -514,13 +518,14 @@ def plot_vdf(dis_vdf):
     """
     import matplotlib.pyplot as plt
 
+    #Added static Contour levels 2018/10/12 J. Prchlik
     n_levels = 10
-    contour_levels = np.arange(n_levels+1)-6-n_levels
+    contour_levels = np.arange(0,2*n_levels+1,2)-4-n_levels*2
 
     fig, ax = plt.subplots(figsize=(8,6))
 
     plotc = ax.pcolormesh(dis_vdf['pgrid'],dis_vdf['qgrid'],np.log10(dis_vdf['vdf']),vmin=-19,vmax=-5)
-    ax.contour(dis_vdf['pgrid'],dis_vdf['qgrid'],np.log10(dis_vdf['vdf']), 10,colors='black',linestyles='dashed',linewidths=3 )
+    ax.contour(dis_vdf['pgrid'],dis_vdf['qgrid'],np.log10(dis_vdf['vdf']), contour_levels,colors='black',linestyles='dashed',linewidths=3 )
     cbar = fig.colorbar(plotc)
     cbar.set_label('Normalized Dist. [s$^{3}$cm$^{-3}$km$^{-3}$]',fontsize=18)
 
