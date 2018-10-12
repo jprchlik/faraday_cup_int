@@ -132,7 +132,7 @@ def make_discrete_vdf(pls_par,mag_par,pres=0.5,qres=0.5,clip=300.):
     #distribution of velocities in the parallel direction
     #p = np.arange(-wpar*clip,(wpar*clip)+pres,pres)
     #updated to fixed range 2018/10/12 J. Prchlik
-    p = np.arange(-clip/2,clip/2+pres,pres)
+    p = np.arange(-clip,clip+pres,pres)
     #distribution of velocities in the perpendicular direction
     #q = np.arange(0,(wper*clip)+qres,qres)
     #updated to fixed range 2018/10/12 J. Prchlik
@@ -551,6 +551,106 @@ def plot_vdf(dis_vdf):
 
     return fig,ax
 
+def sample_function(z_min,z_max,z_peak,max_s=60,min_s=10,wid_s=10):
+    """
+    Parameters
+    ----------
+    z_min: float
+        The minimum solar wind speed accepted by the FC. 
+    z_max: float
+        The maximum solar wind speed accepted by the FC. 
+    z_peak: float
+        The peak of the solar wind in FC coordinates.
+    max_s: int, optional
+        Maximum number of samples near peak (Default = 60)
+    min_s: int, optional
+        Minimum number of samples near peak (Default = 10)
+    wid_s: int, optional
+        Width of Gaussian near peak in same units as z_min, z_max, and z_peak (Default = 10)
+    Returns
+    -------
+    samp: int
+        Number of samples to run in current bin.
+    """
+    z = (z_min+(z_max-z_min)/2.)
+
+    #Gaussian peak
+    A = (max_s-min_s)
+  
+
+    #calculate the number of samples 
+    samp = A*np.exp(-((z-z_peak)**2/(2.*wid_s**2)))+min_s
+    #convert to an integer
+    samp = int(round(samp))
+
+    return samp
+
+
+def arb_p_response_dyn_samp(x_meas,dis_vdf,z_peak,
+                            samp_func = sample_function):
+    """
+    Parameters
+    -----------
+    x_meas: np.array
+         expect x_meas array in the same format as the wind code
+               x[0,:]          v_window  [km/s] 
+               x[1,:]          v_delta   [km/s] 
+               x[2,:]          phi_ang [rad] 
+               x[3,:]          theta_ang [rad] 
+               x[4,:]      b in FC "x"
+               x[5,:]      b in FC "y"
+               x[6,:]      b in FC "z" normal to cup
+        
+    dis_vdf: dictionary
+        A dictionary returned from make_discrete_vdf
+    z_peak: float
+        The location for peak sampling 
+    samp_func: function, optional
+        Dynamic function used to determine the sampling for a given set up x,y,z in FC coordinates (Default = sample_function).
+
+    Returns:
+    --------
+    dis_cur: np.array
+        Discrete values of the measured current in the FC at x[0,:] velocity windows
+    
+    """
+
+    #number of spectral observations in cup
+    nmeas = x_meas.shape[1]
+
+    #simulated measured current
+    f_p_curr = np.zeros(nmeas)
+
+    #set state of the faraday cup
+    fc_state_vlo = x_meas[0,:]-.5*x_meas[1,:] 
+    fc_state_vhi = x_meas[0,:]+.5*x_meas[1,:] 
+    fc_state_phi = x_meas[2,:]
+    fc_state_tht = x_meas[3,:]
+ 
+    
+
+    #get faraday cup measurement at each FC measurement velocity
+    dis_cur = []
+    for i in range( x_meas[0,:].size):
+        
+        #get parameters for each faraday cup value
+        fc_vlo    = fc_state_vlo[i]
+        fc_vhi    = fc_state_vhi[i]
+        phi_ang   = fc_state_phi[i]
+        theta_ang = fc_state_tht[i]
+        
+        #get sampling for current bin
+
+        inp = np.array([fc_vlo,fc_vhi,phi_ang,theta_ang])
+
+        out = fc_meas(dis_vdf,inp,samp=samp)
+        #print(out)
+        dis_cur.append(out)
+
+    dis_cur = np.array(dis_cur)
+
+    return dis_cur
+
 
 def arb_p_response(x_meas,dis_vdf,samp):
     """
@@ -570,7 +670,7 @@ def arb_p_response(x_meas,dis_vdf,samp):
          A dictionary returned from make_discrete_vdf
 
     samp: int
-        Number of samples to use when doing the MidPointIntegration. 30 Seems to be a good mixture
+        Number of samples to use when doing the MidPointIntegration. 40 Seems to be a good mixture
         of rapid integration and high precision. 
 
     Returns:
