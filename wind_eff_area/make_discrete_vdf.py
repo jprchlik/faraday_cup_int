@@ -132,8 +132,6 @@ def make_discrete_vdf(pls_par,mag_par,pres=0.5,qres=0.5,clip=4.):
     #convert FWHM to sigma
     ftos = 1./(2.*np.sqrt(2.*np.log(2.)))
     
-    print('input parameters')
-    print(wper,wpar) 
     #distribution of velocities in the parallel direction
     p = np.arange(-wpar*clip,(wpar*clip)+pres,pres)
     #distribution of velocities in the perpendicular direction
@@ -214,8 +212,9 @@ def make_discrete_vdf_random(dis_vdf,sc_range=0.1,p_sig=5.,q_sig=10.,n_p_prob=[0
 
     #grab some value on the q,p grid use the input VDF to inform the prior
     #normalizing creates preference to cut down middle of velocity distribution 2018/08/23 J. Prchlik
-    p_grab = float(local_state.choice(pgrid.ravel(),size=1))#,p=normval.ravel()))
-    q_grab = float(local_state.choice(qgrid.ravel(),size=1))#,p=normval.ravel()))
+    #Try weighting by the predicted VDF 2018/10/03 J. Prchlik
+    p_grab = float(local_state.choice(pgrid.ravel(),size=1,p=normval.ravel()))
+    q_grab = float(local_state.choice(qgrid.ravel(),size=1,p=normval.ravel()))
 
     
     #try either adding or subtracting
@@ -515,9 +514,13 @@ def plot_vdf(dis_vdf):
     """
     import matplotlib.pyplot as plt
 
+    n_levels = 10
+    contour_levels = np.arange(n_levels+1)-6-n_levels
+
     fig, ax = plt.subplots(figsize=(8,6))
 
     plotc = ax.pcolormesh(dis_vdf['pgrid'],dis_vdf['qgrid'],np.log10(dis_vdf['vdf']),vmin=-19,vmax=-5)
+    ax.contour(dis_vdf['pgrid'],dis_vdf['qgrid'],np.log10(dis_vdf['vdf']), 10,colors='black',linestyles='dashed',linewidths=3 )
     cbar = fig.colorbar(plotc)
     cbar.set_label('Normalized Dist. [s$^{3}$cm$^{-3}$km$^{-3}$]',fontsize=18)
 
