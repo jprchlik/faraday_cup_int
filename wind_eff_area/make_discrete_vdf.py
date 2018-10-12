@@ -47,6 +47,7 @@ def solve_sing_decomp(phi,theta):
     r_vec[:,0] = np.cos(-phi) * np.cos(theta)
     r_vec[:,1] = np.sin(-phi) * np.cos(theta)
     r_vec[:,2] = np.sin(theta)
+
     
     #compute singular value matrix unitary array
     u_svdc,w_svdc,v_svdc = np.linalg.svd(r_vec,compute_uv=True,full_matrices=False)
@@ -80,11 +81,7 @@ def compute_gse_from_fit(phi,theta,fit):
     u_svdc,w_svdc,v_svdc,wp_svdc = solve_sing_decomp(phi,theta)
 
     #Get "best fit" values in FC cooridnates
-    best_vfc =  np.dot(np.dot(np.dot(v_svdc.T,wp_svdc),u_svdc.T),fit)
-    #convert to gse cooridnates
-    #best_vgse = convert_fc_gse(best_vfc,np.mean(phi),np.mean(theta))
-    #Is a - sign base on conversion from FC to GSE coordinates when FC normal points towards the sun
-    best_vgse = -1.*best_vfc.copy()
+    best_vgse =  np.dot(np.dot(np.dot(v_svdc.T,wp_svdc),u_svdc.T),fit)
    
     return best_vgse
 
@@ -289,36 +286,56 @@ def convert_fc_gse(fc_cor,phi_ang,theta_ang):
     return np.array([x_gse,y_gse,z_gse])
 
 
-def euler_angles(phi_ang,theta_ang,psi_ang=0.):
-
-
-   #get euler angles
-   #updating euler angles to a more generic definition 2018/10/04 J. Prchlik
-   a11 = np.cos(psi_ang)*np.cos(theta_ang)*np.cos(phi_ang)-np.sin(psi_ang)*np.sin(phi_ang)
-   a12 = np.cos(psi_ang)*np.cos(theta_ang)*np.sin(phi_ang)+np.sin(psi_ang)*np.cos(phi_ang)
-   a13 = -np.cos(psi_ang)*np.sin(theta_ang)
-   a21 = -np.sin(psi_ang)*np.cos(theta_ang)*np.cos(phi_ang)-np.cos(psi_ang)*np.sin(phi_ang)
-   a22 = -np.sin(psi_ang)*np.cos(theta_ang)*np.sin(phi_ang)+np.cos(psi_ang)*np.cos(phi_ang)
-   a23 = np.sin(psi_ang)*np.sin(theta_ang)
-   a31 = np.sin(theta_ang)*np.cos(phi_ang)
-   a32 = np.sin(theta_ang)*np.sin(phi_ang)
-   a33 = np.cos(theta_ang)
-
-
-   #create rotation matrix
-   rot_mat = np.array([[a11,a12,a13],
-                        [a21,a22,a23],
-                        [a31,a32,a33]],dtype=np.double)
-
-   return rot_mat
-
 def rotation_matrix(phi_ang,theta_ang,psi_ang=0.):
-    #get the stardard euler angles and rotation matrix
-    rot_mat = euler_angles(phi_ang,theta_ang,psi_ang=psi_ang)
+    """   
+    For a single phi, theta, and phi compute the Euler rotation matrix
+   
+    Example
+    --------
+    rot_mat = rotation_matrix(phi_ang,theta_ang,psi_ang=0.)
 
-    
+    Parameters
+    -----------
+    phi_ang: float
+        The phi angle (yaw) between two coordinate systems in radians
+    theta_ang: float
+        The theta angle (pitch) between two coordinate systems in radians
+    psi_ang: float,optional 
+        The psi angle (roll) between two coordinate systems in radians (Default = 0.)
+
+    Returns
+    ---------
+    rot_mat: np.array
+        A 3x3 rotation matrix from the input phi, theta, and psi angles
+    """
+    #get euler angles
+    #updating euler angles to a more generic definition 2018/10/04 J. Prchlik
+    a11 = np.cos(psi_ang)*np.cos(theta_ang)*np.cos(phi_ang)-np.sin(psi_ang)*np.sin(phi_ang)
+    a12 = np.cos(psi_ang)*np.cos(theta_ang)*np.sin(phi_ang)+np.sin(psi_ang)*np.cos(phi_ang)
+    a13 = -np.cos(psi_ang)*np.sin(theta_ang)
+    a21 = -np.sin(psi_ang)*np.cos(theta_ang)*np.cos(phi_ang)-np.cos(psi_ang)*np.sin(phi_ang)
+    a22 = -np.sin(psi_ang)*np.cos(theta_ang)*np.sin(phi_ang)+np.cos(psi_ang)*np.cos(phi_ang)
+    a23 = np.sin(psi_ang)*np.sin(theta_ang)
+    a31 = np.sin(theta_ang)*np.cos(phi_ang)
+    a32 = np.sin(theta_ang)*np.sin(phi_ang)
+    a33 = np.cos(theta_ang)
+
+
+    #create rotation matrix
+    rot_mat = np.array([[a11,a12,a13],
+                         [a21,a22,a23],
+                         [a31,a32,a33]],dtype=np.double)
+
     return rot_mat
 
+#### Redundent 2018/10/12
+####jdef rotation_matrix(phi_ang,theta_ang,psi_ang=0.):
+####j    #get the stardard euler angles and rotation matrix
+####j    rot_mat = euler_angles(phi_ang,theta_ang,psi_ang=psi_ang)
+####j
+####j    
+####j    return rot_mat
+####j
 
 def find_best_vths(wa,we,pls_par,mag_par,rea_cur,inpt_x,pres=1.00,qres=1.00,warange=3.,werange=3.,wasamp=10,wesamp=4):
     """
@@ -434,8 +451,8 @@ def convert_gse_fc(gse_cor,phi_ang,theta_ang):
 
 
     #switched to simplier euler angle transformation 2018/10/03 J. Prchlik
-    rot_mat = euler_angles(phi_ang,theta_ang)
-    rot_cor = euler_angles(-np.pi/2.,-np.pi/2.)
+    rot_mat = rotation_matrix(phi_ang,theta_ang)
+    rot_cor = rotation_matrix(-np.pi/2.,-np.pi/2.)
     p_grid  = rot_mat.dot(rot_cor).T.dot(gse_cor)
 
     
