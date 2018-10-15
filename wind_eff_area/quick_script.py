@@ -12,7 +12,7 @@ def gaus(x,a,x0,sigma):
     return a*np.exp(-(x-x0)**2/(2*sigma**2))
 
 def proc_wrap(arg):
-    return [mdv.arb_p_response(*arg[:-1]),arg[-1]]
+    return [mdv.arb_p_response_dyn_samp(*arg[:-1]),arg[-1]]
 
 def create_random_vdf(dis_vdf_guess,nproc,n_p_prob):
     """
@@ -107,9 +107,11 @@ def create_random_vdf_multi_fc(fcs,proc,cur_err,dis_vdf_guess,cont,samp=30,verbo
     #loop over all fc in fcs to populate with new VDF guess
     for i,key in enumerate(fcs.keys()):
         #add variation and store which faraday cup you are working with using key
+        #Updated with varying integration sampling function 2018/10/12 J. Prchlik
         inpt_x = fcs[key]['x_meas'].copy()
         g_vdf  = dis_vdf_bad.copy()
-        looper.append((inpt_x,g_vdf,samp,key))
+        peak   =  fcs[key]['peak'].copy()
+        looper.append((inpt_x,g_vdf,peak,key))
 
     #process in parallel
     pool = Pool(processes=nproc)
@@ -162,38 +164,16 @@ time_start = time.time()
 
 #set up plasma parameters
 #                    Vx  ,  Vy,  Vz ,Wper,Wpar, Np
-pls_par = np.array([-380., -30., 30., 20., 40., 5.]) 
-pls_par = np.array([-580., 100., -10., 10., 80., 15.]) 
+#pls_par = np.array([-380., -30., 30., 20., 40., 5.]) 
+pls_par = np.array([-580., 10., -10., 40., 120., 15.]) 
 #pls_par = np.array([-480., -100., -80., 20., 50., 25.]) 
 #pls_par = np.array([-380., -100., 50., 30., 10., 50.]) 
 #pls_par = np.array([-880., 100.,-150., 30., 10., 5.]) 
-mag_par = np.array([np.cos(np.radians(75.))*np.cos(.1), np.sin(np.radians(75.))*np.cos(.1), np.sin(.1)]) 
-#mag_par = np.array([1., 0., 0.]) 
+#mag_par = np.array([np.cos(np.radians(75.))*np.cos(.1), np.sin(np.radians(75.))*np.cos(.1), np.sin(.1)]) 
+#mag_par = np.array([np.cos(np.radians(25.)),np.sin(np.radians(25.)), 0.]) 
+mag_par = np.array([1.,0., 0.]) 
 
-#number of sample for integration
-samp = 5e1
-#make a discrete VDF
-dis_vdf = mdv.make_discrete_vdf(pls_par,mag_par,pres=1.00,qres=1.00,clip=4.)
-
-
-
-#get random angles of faraday cup in phi and theta
-#number of fc cups
-ncup = 20
-#set random seed for FC angles
-np.random.seed(1107)
-
-#Get two uniform number between -30 and 30
-phis = np.random.uniform(-20.,20.,size=ncup)
-thetas = np.random.uniform(-20.,20.,size=ncup)
-
-
-#spacecraft measurements of phi and theta to show when plotting
-phi = float(phis[-1])
-theta = float(thetas[-1])
-
-
-#report some measurements
+#Set up observering condidtions before making any VDFs
 #veloity grid
 #########################################
 ######################################
@@ -210,6 +190,50 @@ cont  = 1.e12/(waeff*q0*dv*grid_v)
     #                              = cm-3 * s * km-1 =
     #                              particles per cm-3 per km/s
 #number of processes to use per calculation
+
+#number of sample for integration
+samp = 4.5e1
+#make a discrete VDF
+#updated clip to a velocity width 2018/10/12 J. Prchlik
+vel_clip = np.ptp(grid_v)
+dis_vdf = mdv.make_discrete_vdf(pls_par,mag_par,pres=1.00,qres=1.00,clip=vel_clip)
+
+
+
+#get random angles of faraday cup in phi and theta
+#number of fc cups
+ncup = 20
+#set random seed for FC angles
+#np.random.seed(1107)
+
+
+#Get two uniform number between -30 and 30
+limit = 90.
+phis = np.random.uniform(-limit,limit,size=ncup)
+thetas = np.random.uniform(-30.,30.,size=ncup)
+#Setup a wind like scan J. Prchlik 2018/10/11
+####phis = np.linspace(-80,80,ncup)
+#####two thetas for wind
+####phis = np.repeat(phis,2)
+####thetas = 20.+np.zeros(phis.size)
+#####Add a second set of thetas 45 degrees away
+####thetas[1::2] += -45
+
+
+#The normal vector of the FC with respect to GSE coordinates
+fc_vec = np.zeros((ncup,3))
+#Include - sign in phi because of opposite of GSE phi (which is how phi is defined) when FC normal points towards the Sun
+fc_vec[:,0] = np.cos(np.radians(phis)) * np.cos(np.radians(thetas))
+fc_vec[:,1] = np.sin(np.radians(phis)) * np.cos(np.radians(thetas))
+fc_vec[:,2] = np.sin(np.radians(thetas))
+
+
+#spacecraft measurements of phi and theta to show when plotting
+phi = float(phis[-1])
+theta = float(thetas[-1])
+
+
+#report some measurements
 nproc = 8
 
 #array that store all the fit parameters 
@@ -221,7 +245,12 @@ for k,(phi,theta) in enumerate(zip(phis,thetas)):
     #calculate x_meas array
     x_meas = mdv.make_fc_meas(dis_vdf,fc_spd=grid_v,fc_phi=phi,fc_theta=theta)
     #compute the observed current in the instrument
-    rea_cur = mdv.arb_p_response(x_meas,dis_vdf,samp)
+    #Use dynamic sampling 2018/10/12 J. Prchlik
+    #rea_cur = mdv.arb_p_response(x_meas,dis_vdf,samp)
+    rad_phi,rad_theta = np.radians((phi,theta))
+    pro_unt = np.array([np.cos(rad_phi)*np.cos(rad_theta),np.sin(rad_phi)*np.cos(rad_theta),np.sin(rad_theta)])
+    peak = np.abs(pls_par[:3].dot(pro_unt))
+    rea_cur = mdv.arb_p_response_dyn_samp(x_meas,dis_vdf,peak)
 
     #create key for input fc
     key = 'fc_{0:1d}'.format(k)
@@ -230,10 +259,16 @@ for k,(phi,theta) in enumerate(zip(phis,thetas)):
     #populate key with measurements and parameter 
     fcs[key]['x_meas']  = x_meas
     fcs[key]['rea_cur'] = rea_cur
+    fcs[key]['peak']    = peak
 
 
     #calculate the Gaussian fit of the response
-    popt, pcov = curve_fit(gaus,grid_v,rea_cur*cont,p0=[np.nanmax(rea_cur*cont),np.mean(grid_v),np.sqrt(2.)*2*dv[0]],sigma=1./(rea_cur/rea_cur.min()))
+    try:
+        popt, pcov = curve_fit(gaus,grid_v,rea_cur*cont,p0=[np.nanmax(rea_cur*cont),np.mean(grid_v),np.sqrt(2.)*2*dv[0]],sigma=1./(rea_cur/rea_cur.min()),maxfev=5000)
+    except RuntimeError:
+        #give number that will be thrown out if no fit is found 
+        popt = np.zeros(3)-9999.9
+        pcov = np.zeros((3,3))-9999.9
     
     
     #Switched to computing the average
@@ -243,9 +278,9 @@ for k,(phi,theta) in enumerate(zip(phis,thetas)):
     n = popt[0]*w*np.sqrt(np.pi) #density in cc
     ####
     #####uncertainty in parameters from fit
-    ####du = pcov[1,1]
-    ####dw = pcov[2,2]
-    ####dn = np.sqrt(np.pi*((w*pcov[0,0])**2 + (dw*n)**2))
+    du = np.sqrt(pcov[1,1])
+    dw = np.sqrt(pcov[2,2])
+    dn = np.sqrt(np.pi*((w**2.*pcov[0,0]) + (dw*n)**2))
 
  
 
@@ -259,64 +294,112 @@ for k,(phi,theta) in enumerate(zip(phis,thetas)):
     ####wper = np.sqrt(np.sum(np.array([wx,wy,wz])**2.)-wpar**2.)
 
     #Add fit parameters with velocity guesses
-    big_arr.append([u,w,n,phi,theta])
+    big_arr.append([u,w,n,phi,theta,du,dw,dn])
+
 
 #convert big_arr intop numpy array
 big_arr = np.array(big_arr)
 #get speed solution per observatory
 v_angl = big_arr[:,0]
+uv_angl = big_arr[:,5]
 #thermal speed in GSE
 w_angl = big_arr[:,1]
+uw_angl = big_arr[:,6]
 #get the density to compute the magnitude
 n_angl = big_arr[:,2]
+un_angl = big_arr[:,7]
 
 #density components in  GSE
-rot_mat = mdv.euler_angles(np.arctan2(mag_par[1],mag_par[0]),np.arcsin(mag_par[2]),psi_ang=0.)
+rot_mat = mdv.rotation_matrix(np.arctan2(mag_par[1],mag_par[0]),np.arcsin(mag_par[2]),psi_ang=0.)
 
+
+#Use the top 5 peaks to get density and velocity values if the number of measurements are greater than 5
+top5 = n_angl > np.sort(n_angl)[-6]
 
 #get v_gse solution (Produces the same solution as the Wind spacecraft solution)
 #in /crater/observatories/wind/code/dvapbimax/sub_bimax_moments.pro
-vx,vy,vz =  mdv.compute_gse_from_fit(np.radians(phis),np.radians(thetas),v_angl) #np.dot(np.dot(np.dot(v_svdc.T,wp_svdc),u_svdc.T),v_angl)
-wv =  mdv.compute_gse_from_fit(np.radians(phis),np.radians(thetas),w_angl) #np.dot(np.dot(np.dot(v_svdc.T,wp_svdc),u_svdc.T),v_angl)
-nv =  np.mean(n_angl)
+v_vec =  mdv.compute_gse_from_fit(np.radians(phis[top5]),np.radians(thetas[top5]),-v_angl[top5]) #np.dot(np.dot(np.dot(v_svdc.T,wp_svdc),u_svdc.T),v_angl)
+vx,vy,vz = v_vec
+##JUST USE MIN/MAX for Density and THERMAL VELOCITY VALUES 2018/10/15 J. Prchlik
+#Changed mind use par and per decomp values to get Wper and Wpar
+#Find angles between Mag field and FC measurements
+fc_mag_ang = np.abs(fc_vec.dot(mag_par))
+
+#get the top 5 most perpendicular and parallel measurements
+cut_ang = np.cos(np.radians(45.))
+par5 = ((v_angl > 0.) & (fc_mag_ang > cut_ang ))
+per5 = ((v_angl > 0.) & (fc_mag_ang < cut_ang ))
+
+#Get Wper and Wpar vectors using SVD and the magnetic field vectors
+wv_par =  mdv.compute_gse_from_fit(np.radians(phis[par5]),np.radians(thetas[par5]),w_angl[par5]) 
+wa = wv_par.dot(mag_par)
+
+wv_per =  mdv.compute_gse_from_fit(np.radians(phis[per5]),np.radians(thetas[per5]),w_angl[per5]) 
+we = np.sqrt(np.linalg.norm(wv_per)**2.-wv_per.dot(mag_par)**2.)
+
 
 #compute density
-n = np.sqrt(np.sum(nv**2))
+#n = np.sqrt(np.sum(nv**2))
+#Just use Max 2018/10/15 J. Prchlik
+#compute angle between FC and the observed bulk velocity (cos(theta`))
+fc_vel_ang = fc_vec.dot(v_vec)/(np.linalg.norm(v_vec))
+n = np.median(np.abs(n_angl[top5]/fc_vel_ang[top5]))
 
+#Just use simple min/max
 #Transform wv gse to magnetic field frame
-wmag = rot_mat.dot(wv)
+#wmag = rot_mat.dot(wv)
 
 #compute Wpar and Wper
 #Use Theta and phi angles between Vgse and Bnorm to get the new vectors
 #we = np.abs(wv.dot(mag_par)) #Wper
 #wa = np.abs(wv.dot(mag_par)) #Wpar
 #we = np.sqrt(np.sum(wv**2)-wa**2)/2. #Wper (factor of 2 comes from assumption of half in each V_perp comp
-wa = np.abs(wmag[0])
-we = np.sqrt(np.sum(wmag[1:]**2))
+#wa = np.abs(rot_mat.dot(wv)[0])
+#we = np.sqrt(np.linalg.norm(wv)**2-wa**2)
+#Switch to MIN/MAX for Vper and Vpar predictions
+#only use values greater than 0
 
+
+#dont let initial guess be smaller than half a bin size
+if we < min(dv)/2.: 
+    we = min(dv)/2.
 
 
 #make a discrete VDF with the incorrect parameters but the same grid
 pls_par_bad = np.array([vx, vy, vz,we,wa,n])
 
 #Try and update the input Guess for the Wper Wpar parameters before X^2 min
-wa, we =  mdv.find_best_vths(wa,we,pls_par_bad,mag_par,fcs[key]['rea_cur'],fcs[key]['x_meas'])
+#wa, we =  mdv.find_best_vths(wa,we,pls_par_bad,mag_par,fcs[key]['rea_cur'],fcs[key]['x_meas'])
 
 #update with new Wper and Wpar paraemters
 pls_par_bad = np.array([vx, vy, vz,we,wa,n])
 
-dis_vdf_bad = mdv.make_discrete_vdf(pls_par_bad,mag_par,pres=1.00,qres=1.00,clip=5.)
+######################################################################
+######################################################################
+#EVERYTHING BEFORE THIS WOULD BE MEASURED BY A SPACECRAFT
+######################################################################
+######################################################################
+
+#Updated with vel_clip parameter 2108/10/12 J. Prchlik
+dis_vdf_bad = mdv.make_discrete_vdf(pls_par_bad,mag_par,pres=1.00,qres=1.00,clip=vel_clip)
 #store the initial bad guess 
 dis_vdf_bad_guess = dis_vdf_bad
 #calculate x_meas array for the average with multiple observatories
 #put in the same rest frame as the modelled input 2018/09/13 J. Prchlik
-x_meas_eff = mdv.make_fc_meas(dis_vdf,fc_spd=grid_v,fc_phi=phi,fc_theta=theta)
-dis_cur_bad_guess = mdv.arb_p_response(fcs[key]['x_meas'],dis_vdf_bad_guess,samp)
+###REMOVED BECAUSE NOT NEEDED 2108/10/12 J. Prchlik
+#x_meas_eff = mdv.make_fc_meas(dis_vdf,fc_spd=grid_v,fc_phi=phi,fc_theta=theta)
+#dis_cur_bad_guess = mdv.arb_p_response(fcs[key]['x_meas'],dis_vdf_bad_guess,samp)
 
 #Get the initial distribution based on input parameters 2018/09/19 J. Prchlik 
-for i in fcs.keys():
-    fcs[i]['init_guess'] = mdv.arb_p_response(fcs[i]['x_meas'],dis_vdf_bad_guess,samp)
+print('LOOK HERE FOR OFF PEAK')
+for k,i in enumerate(fcs.keys()):
+    i = 'fc_{0:1d}'.format(k)
+    #fcs[i]['init_guess'] = mdv.arb_p_response(fcs[i]['x_meas'],dis_vdf_bad_guess,samp)
+    #updated using dynamic sampling 2018/10/12 J. Prchlik
+    fcs[i]['init_guess'] = mdv.arb_p_response_dyn_samp(fcs[i]['x_meas'],dis_vdf_bad_guess,fcs[i]['peak'])
+    #fcs[i]['init_guess'] = mdv.arb_p_response(fcs[i]['x_meas'],dis_vdf_bad_guess,samp)
 
+print('LOOK HERE FOR OFF PEAK END')
 
 
 
@@ -400,7 +483,7 @@ fig.subplots_adjust(wspace=0.01,hspace=0.01)
 counter = 0
 for key,ax in zip(fcs.keys(),axs.ravel()):
     #removed to test improving Gaussian fit
-    ax.plot(grid_v,fcs[key]['dis_cur'].ravel()*cont,label='Best MC',color='black',linewidth=3)
+#    ax.plot(grid_v,fcs[key]['dis_cur'].ravel()*cont,label='Best MC',color='black',linewidth=3)
     ax.plot(grid_v,fcs[key]['rea_cur'].ravel()*cont,'-.b',label='Input',linewidth=3)
     #ax.plot(grid_v,rea_cur.ravel()*cont,'-.b',label='Input',linewidth=3)
     ax.plot(grid_v,fcs[key]['init_guess'].ravel()*cont,':',color='purple',label='Init. Guess',linewidth=3)
