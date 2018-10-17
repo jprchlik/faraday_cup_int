@@ -30,8 +30,6 @@ def solve_sing_decomp(phi,theta):
             A three column by three row orthoginal array used for decomposition.
         wp_svdc: np.array
             A 3x3 diagonal matrix with the diagonal containing values of 1./w_svdc.  
-   
-
     """
 
     #number of faraday cup angles
@@ -157,7 +155,7 @@ def make_discrete_vdf(pls_par,mag_par,pres=0.5,qres=0.5,clip=300.):
     dis_vdf = {'vdf':rawvdf,'pgrid':pgrid,'qgrid':qgrid,'u_gse':u_gse,'b_gse':mag_par,'vdf_func':f}
     return dis_vdf
 
-def make_discrete_vdf_random(dis_vdf,sc_range=0.1,p_sig=5.,q_sig=10.,n_p_prob=[0.5,0.5]):
+def make_discrete_vdf_random(dis_vdf,sc_range=0.1,p_sig=10.,q_sig=10.,n_p_prob=[0.5,0.5]):
     """
     Returns Discrete Velocity distribution function given a set of input parameters. With random variations 
     in the raw vdf
@@ -214,8 +212,8 @@ def make_discrete_vdf_random(dis_vdf,sc_range=0.1,p_sig=5.,q_sig=10.,n_p_prob=[0
     #grab some value on the q,p grid use the input VDF to inform the prior
     #normalizing creates preference to cut down middle of velocity distribution 2018/08/23 J. Prchlik
     #Try weighting by the predicted VDF 2018/10/03 J. Prchlik
-    p_grab = float(local_state.choice(pgrid.ravel(),size=1,p=normval.ravel()))
-    q_grab = float(local_state.choice(qgrid.ravel(),size=1,p=normval.ravel()))
+    p_grab = float(local_state.choice(pgrid.ravel(),size=1))#,p=normval.ravel()))
+    q_grab = float(local_state.choice(qgrid.ravel(),size=1))#,p=normval.ravel()))
 
     
     #try either adding or subtracting
@@ -232,6 +230,9 @@ def make_discrete_vdf_random(dis_vdf,sc_range=0.1,p_sig=5.,q_sig=10.,n_p_prob=[0
 
     #adjust the height of the peak
     var = float(local_state.uniform(low=low_off,high=hgh_off,size=1))
+
+    #add varience to a_scale
+    a_scale *= var
 
     #add variation guassian to rawvdf
     ranvdf = a_scale*a*np.exp(- ((pgrid-p_grab)/p_sig)**2. - ((qgrid-q_grab)/q_sig)**2.)+rawvdf
@@ -551,7 +552,7 @@ def plot_vdf(dis_vdf):
 
     return fig,ax
 
-def sample_function(z_min,z_max,z_peak,max_s=60,min_s=10,wid_s=10):
+def sample_function(z_min,z_max,z_peak,max_s=45,min_s=30,wid_s=100):
     """
     Parameters
     ----------
@@ -562,9 +563,9 @@ def sample_function(z_min,z_max,z_peak,max_s=60,min_s=10,wid_s=10):
     z_peak: float
         The peak of the solar wind in FC coordinates.
     max_s: int, optional
-        Maximum number of samples near peak (Default = 60)
+        Maximum number of samples near peak (Default = 45)
     min_s: int, optional
-        Minimum number of samples near peak (Default = 10)
+        Minimum number of samples near peak (Default = 30)
     wid_s: int, optional
         Width of Gaussian near peak in same units as z_min, z_max, and z_peak (Default = 10)
     Returns
@@ -641,6 +642,7 @@ def arb_p_response_dyn_samp(x_meas,dis_vdf,z_peak,
         
         #get sampling for current bin
         samp = samp_func(fc_vlo,fc_vhi,z_peak)
+        #print(samp,fc_vlo,fc_vhi,z_peak,phi_ang,theta_ang)
 
         inp = np.array([fc_vlo,fc_vhi,phi_ang,theta_ang])
 
