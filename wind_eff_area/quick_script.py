@@ -92,6 +92,12 @@ def create_random_vdf_multi_fc(fcs,proc,cur_err,dis_vdf_guess,cont,samp=30,verbo
     looper = []
 
 
+    #Total intensity measurement
+    tot_I = 0
+    for key in fcs.keys():
+        tot_I += np.sum(fcs[key]['rea_cur'])
+
+
     sc_range = 0.1
     #on the first loop do not update
     if cur_err > 1e30:
@@ -101,8 +107,10 @@ def create_random_vdf_multi_fc(fcs,proc,cur_err,dis_vdf_guess,cont,samp=30,verbo
         #Add Guassian 2D perturbation
         #create Vper and Vpar VDF with pertabation from first key because VDF is the same for all FC
         #use 3% of total width for Gaussian kernals instead of 10% 2018/09/19 J. Prchlik
-        dis_vdf_bad = mdv.make_discrete_vdf_random(dis_vdf_guess,sc_range=sc_range,
-                         p_sig=0.03*np.ptp(dis_vdf_guess['pgrid']),q_sig=0.03*np.ptp(dis_vdf_guess['qgrid']))
+        kernal_size = cur_err/tot_I*100.
+        
+        dis_vdf_bad = mdv.make_discrete_vdf_random(dis_vdf_guess,sc_range=sc_range,p_sig=3.,q_sig=3.)
+                        
 
     #loop over all fc in fcs to populate with new VDF guess
     for i,key in enumerate(fcs.keys()):
@@ -165,9 +173,9 @@ time_start = time.time()
 #set up plasma parameters
 #                    Vx  ,  Vy,  Vz ,Wper,Wpar, Np
 #pls_par = np.array([-380., -30., 30., 20., 40., 5.]) 
-pls_par = np.array([-580., 10., -10., 40., 120., 15.]) 
+#pls_par = np.array([-580., 10., -10., 40., 120., 15.]) 
 #pls_par = np.array([-480., -100., -80., 20., 50., 25.]) 
-#pls_par = np.array([-380., -100., 50., 30., 10., 50.]) 
+pls_par = np.array([-380., -100., 50., 30., 10., 50.]) 
 #pls_par = np.array([-880., 100.,-150., 30., 10., 5.]) 
 #mag_par = np.array([np.cos(np.radians(75.))*np.cos(.1), np.sin(np.radians(75.))*np.cos(.1), np.sin(.1)]) 
 #mag_par = np.array([np.cos(np.radians(25.)),np.sin(np.radians(25.)), 0.]) 
@@ -195,7 +203,8 @@ cont  = 1.e12/(waeff*q0*dv*grid_v)
 samp = 4.5e1
 #make a discrete VDF
 #updated clip to a velocity width 2018/10/12 J. Prchlik
-vel_clip = np.ptp(grid_v)
+#Set to a "Total velocity width" which could be measured by the space craft 2018/10/15
+vel_clip = 4.*np.sqrt(np.sum(pls_par[4:6]**2))
 dis_vdf = mdv.make_discrete_vdf(pls_par,mag_par,pres=1.00,qres=1.00,clip=vel_clip)
 
 
@@ -326,16 +335,14 @@ vx,vy,vz = v_vec
 fc_mag_ang = np.abs(fc_vec.dot(mag_par))
 
 #get the top 5 most perpendicular and parallel measurements
-cut_ang = np.cos(np.radians(45.))
-par5 = ((v_angl > 0.) & (fc_mag_ang > cut_ang ))
-per5 = ((v_angl > 0.) & (fc_mag_ang < cut_ang ))
+###cut_ang = np.cos(np.radians(45.))
+###par5 = ((v_angl > 0.) & (fc_mag_ang > cut_ang ))
+###per5 = ((v_angl > 0.) & (fc_mag_ang < cut_ang ))
 
 #Get Wper and Wpar vectors using SVD and the magnetic field vectors
-wv_par =  mdv.compute_gse_from_fit(np.radians(phis[par5]),np.radians(thetas[par5]),w_angl[par5]) 
+wv_par =  mdv.compute_gse_from_fit(np.radians(phis[top5]),np.radians(thetas[top5]),w_angl[top5]) 
 wa = wv_par.dot(mag_par)
-
-wv_per =  mdv.compute_gse_from_fit(np.radians(phis[per5]),np.radians(thetas[per5]),w_angl[per5]) 
-we = np.sqrt(np.linalg.norm(wv_per)**2.-wv_per.dot(mag_par)**2.)
+we = np.sqrt(np.linalg.norm(wv_par)**2.-wv_par.dot(mag_par)**2.)
 
 
 #compute density
@@ -420,7 +427,7 @@ tot_err = 1e31 #a very large number
 start_loop = time.time()
 #takes about 1000 iterations to converge (~30 minutes), but converged to the wrong solution, mostly overestimated the peak
 #removed to test improving fit
-for i in range(1):
+for i in range(30000):
     #get a new vdf and return if it is the best fit
     #dis_vdf_bad,tot_error,dis_cur = create_random_vdf(dis_vdf_bad,nproc,n_p_prob)
     fcs,tot_err,dis_vdf_bad = create_random_vdf_multi_fc(fcs,nproc,tot_err,dis_vdf_bad,cont)
@@ -483,7 +490,7 @@ fig.subplots_adjust(wspace=0.01,hspace=0.01)
 counter = 0
 for key,ax in zip(fcs.keys(),axs.ravel()):
     #removed to test improving Gaussian fit
-#    ax.plot(grid_v,fcs[key]['dis_cur'].ravel()*cont,label='Best MC',color='black',linewidth=3)
+    ax.plot(grid_v,fcs[key]['dis_cur'].ravel()*cont,label='Best MC',color='black',linewidth=3)
     ax.plot(grid_v,fcs[key]['rea_cur'].ravel()*cont,'-.b',label='Input',linewidth=3)
     #ax.plot(grid_v,rea_cur.ravel()*cont,'-.b',label='Input',linewidth=3)
     ax.plot(grid_v,fcs[key]['init_guess'].ravel()*cont,':',color='purple',label='Init. Guess',linewidth=3)
