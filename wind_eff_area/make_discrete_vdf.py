@@ -155,7 +155,7 @@ def make_discrete_vdf(pls_par,mag_par,pres=0.5,qres=0.5,clip=300.):
     dis_vdf = {'vdf':rawvdf,'pgrid':pgrid,'qgrid':qgrid,'u_gse':u_gse,'b_gse':mag_par,'vdf_func':f}
     return dis_vdf
 
-def make_discrete_vdf_random(dis_vdf,sc_range=0.1,p_sig=10.,q_sig=10.,n_p_prob=[0.5,0.5]):
+def make_discrete_vdf_random(dis_vdf,improved=False,sc_range=0.1,p_sig=10.,q_sig=10.,n_p_prob=[0.5,0.5],ip=0.,iq=0.):
     """
     Returns Discrete Velocity distribution function given a set of input parameters. With random variations 
     in the raw vdf
@@ -167,6 +167,8 @@ def make_discrete_vdf_random(dis_vdf,sc_range=0.1,p_sig=10.,q_sig=10.,n_p_prob=[
         Dictionary containing a discrete VDF function ['vdf'], the propogating direction grid ['pgrid'],
         the perpendicular to the propogating direction grid ['qgrid'], velocity vector in gse ['u_gse'],
         the normal magnetic field vector ['b_gse'] and a BiVariateSpline interpolation function ['vdf_func'].   
+    improved: boolean, optional
+        Whether the previous iteration improved the fit (Default = False)
     sc_range: float,optional
         Range to vary the input VDF as a fraction (Default = 0.1)
     p_sig: float,optional
@@ -177,6 +179,12 @@ def make_discrete_vdf_random(dis_vdf,sc_range=0.1,p_sig=10.,q_sig=10.,n_p_prob=[
         The probability of selecting a positive or negative gaussian. The first element is the probability
         of selecting a gaussian that removes from the vdf, while the second element is the probability of 
         selecting a gaussian that adds to the vdf. The total probability must sum to 1 (default = [0.5,0.5]).
+    ip: float, optional
+        Location of the last Gaussian kernal guess in the P coordinate (Default = 0.). If improved is true then
+        this coordinate improved the fit and will be used for the next guess.
+    iq: float, optional
+        Location of the last Gaussian kernal guess in the Q coordinate (Default = 0.). If improved is true then
+        this coordinate improved the fit and will be used for the next guess.
 
     Returns:
     ---------
@@ -184,8 +192,13 @@ def make_discrete_vdf_random(dis_vdf,sc_range=0.1,p_sig=10.,q_sig=10.,n_p_prob=[
         Dictionary containing a discrete VDF function ['vdf'], the propogating direction grid ['pgrid'],
         the perpendicular to the propogating direction grid ['qgrid'], velocity vector in gse ['u_gse'],
         the normal magnetic field vector ['b_gse'] and a BiVariateSpline interpolation function ['vdf_func'].   
+    p_grab:  float
+        The center of the new Gaussian in the p coordinate
+    q_grab:  float
+        The center of the new Gaussian in the q coordinate
+    a_scale: float
+        The scale factor of the Gaussian kernal applied to 2D velocity distribution that is either +/-1
     """
-    from scipy.ndimage.filters import gaussian_filter
 
     #distribution of velocities in the parallel direction
     p = dis_vdf['pgrid'][:,0]
@@ -212,12 +225,18 @@ def make_discrete_vdf_random(dis_vdf,sc_range=0.1,p_sig=10.,q_sig=10.,n_p_prob=[
     #grab some value on the q,p grid use the input VDF to inform the prior
     #normalizing creates preference to cut down middle of velocity distribution 2018/08/23 J. Prchlik
     #Try weighting by the predicted VDF 2018/10/03 J. Prchlik
-    p_grab = float(local_state.choice(pgrid.ravel(),size=1))#,p=normval.ravel()))
-    q_grab = float(local_state.choice(qgrid.ravel(),size=1))#,p=normval.ravel()))
+    #Grad point in the same area if previous gaussian improved fit
+    if improved:
+        p_grab = float(local_state.normal(loc=ip,scale=p_sig,size=1))#,p=normval.ravel()))
+        q_grab = float(local_state.normal(loc=iq,scale=q_sig,size=1))#,p=normval.ravel()))
+    #Do no guess in same area if adding a Gaussian did not improve the fit 2018/10/18 J. Prchlik
+    else:
+        p_grab = float(local_state.choice(pgrid.ravel(),size=1))#,p=normval.ravel()))
+        q_grab = float(local_state.choice(qgrid.ravel(),size=1))#,p=normval.ravel()))
 
     
     #try either adding or subtracting
-    a_scale = float(local_state.choice([-1.,1],size=1))
+    a_scale = float(local_state.choice([-1.,1],size=1,p=n_p_prob))
 
 
     #calculate amplitude of vdf at p_grab, q_grab
@@ -251,7 +270,7 @@ def make_discrete_vdf_random(dis_vdf,sc_range=0.1,p_sig=10.,q_sig=10.,n_p_prob=[
     
     #create dictionary
     ran_vdf = {'vdf':ranvdf,'pgrid':pgrid,'qgrid':qgrid,'u_gse':u_gse,'b_gse':mag_par,'vdf_func':f}
-    return ran_vdf
+    return ran_vdf,p_grab,q_grab,a_scale
 
 def convert_fc_gse(fc_cor,phi_ang,theta_ang):
     """
