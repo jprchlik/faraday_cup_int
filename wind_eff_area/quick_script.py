@@ -5,6 +5,7 @@ from fancy_plot import fancy_plot
 from multiprocessing import Pool
 import time
 from scipy.optimize import curve_fit
+import multi_fc_functions as mff
 
 
 
@@ -61,110 +62,110 @@ def create_random_vdf(dis_vdf_guess,nproc,n_p_prob):
     #return best dictionary and total error
     return looper[best_ind][1],tot_err[best[0]],dis_cur[best[0]]
 
-def create_random_vdf_multi_fc(fcs,proc,cur_err,dis_vdf_guess,cont,samp=30,verbose=False):
-    """
-    Parameters
-    -----------
-    proc : int
-        Number of processors to run on
-    cur_err : float
-        Current sum squared errors between the observations and the integrated VDF
-    dis_vdf_guess: np.array
-        The current best fit 2D VDF guess
-    samp : int, optional
-        The number of samples to use in 3D integration
-    cont: np.array
-        Array of floats to convert shape into current
-    verbose: boolean
-        Print Chi^2 min values when a solution improves the fit
-
-    Returns
-    -------
-        looper[best_ind][1],tot_err[best[0]],dis_cur[best[0]]
-  
-    Usage
-    ------
-    create_random_vdf_multi_fc(proc,cur_err)
-   
-    """
-
-    #looper for multiprocessing
-    looper = []
-
-
-    #Total intensity measurement
-    tot_I = 0
-    for key in fcs.keys():
-        tot_I += np.sum(fcs[key]['rea_cur'])
-
-
-    sc_range = 0.1
-    #on the first loop do not update
-    if cur_err > 1e30:
-        dis_vdf_bad = dis_vdf_guess
-
-    else:
-        #Add Guassian 2D perturbation
-        #create Vper and Vpar VDF with pertabation from first key because VDF is the same for all FC
-        #use 3% of total width for Gaussian kernals instead of 10% 2018/09/19 J. Prchlik
-        kernal_size = cur_err/tot_I*100.
-        
-        dis_vdf_bad = mdv.make_discrete_vdf_random(dis_vdf_guess,sc_range=sc_range,p_sig=3.,q_sig=3.)
-                        
-
-    #loop over all fc in fcs to populate with new VDF guess
-    for i,key in enumerate(fcs.keys()):
-        #add variation and store which faraday cup you are working with using key
-        #Updated with varying integration sampling function 2018/10/12 J. Prchlik
-        inpt_x = fcs[key]['x_meas'].copy()
-        g_vdf  = dis_vdf_bad.copy()
-        peak   =  fcs[key]['peak'].copy()
-        looper.append((inpt_x,g_vdf,peak,key))
-
-    #process in parallel
-    pool = Pool(processes=nproc)
-    dis_cur = pool.map(proc_wrap,looper)
-    pool.close()
-    pool.join()
-
-    #break into index value in looper and the 1D current distribution
-    index   = np.array(zip(*dis_cur)[1])
-    dis_cur = np.array(zip(*dis_cur)[0])
-
-
-    #get sum squared best fit
-    tot_err = np.zeros(dis_cur.shape[0])
-    #Get error in each faraday cup
-    for j,i in enumerate(index):
-         tot_err[j] = np.sum((dis_cur[j,:] - fcs[i]['rea_cur'])**2)
-
-    #print(tot_err)
-    #total error for all fc
-    #fcs_err = np.median(tot_err)
-    fcs_err = np.sqrt(np.sum(tot_err))
-    
-
-    #return best VDF and total error
-    if fcs_err < cur_err:
-        if verbose:
-            print('STATS for this run')
-            print('Old Err = {0:4.3e}'.format(cur_err))
-            print('New Err = {0:4.3e}'.format(fcs_err))
-            print('X2 Err = {0:4.3e}'.format(np.sum(np.sum((dis_cur - rea_cur)**2.,axis=1))))
-            print('Mean Err = {0:4.3e}'.format(tot_err.mean()))
-            print('Med. Err = {0:4.3e}'.format(np.median(tot_err)))
-            print('Max. Err = {0:4.3e}'.format(np.max(tot_err)))
-            print('Min. Err = {0:4.3e}'.format(np.min(tot_err)))
-            print(tot_err)
-            print('##################')
-        #updated measured currents
-        for j,i in enumerate(index):
-            fcs[i]['dis_cur'] = dis_cur[j]
-        return fcs,fcs_err,dis_vdf_bad
-    #If no improvement just return the pervious value
-    else:
-        return fcs,cur_err,dis_vdf_guess
-    
+####def create_random_vdf_multi_fc(fcs,proc,cur_err,dis_vdf_guess,cont,samp=30,verbose=False):
+####    """
+####    Parameters
+####    -----------
+####    proc : int
+####        Number of processors to run on
+####    cur_err : float
+####        Current sum squared errors between the observations and the integrated VDF
+####    dis_vdf_guess: np.array
+####        The current best fit 2D VDF guess
+####    samp : int, optional
+####        The number of samples to use in 3D integration
+####    cont: np.array
+####        Array of floats to convert shape into current
+####    verbose: boolean
+####        Print Chi^2 min values when a solution improves the fit
+####
+####    Returns
+####    -------
+####        looper[best_ind][1],tot_err[best[0]],dis_cur[best[0]]
+####  
+####    Usage
+####    ------
+####    create_random_vdf_multi_fc(proc,cur_err)
+####   
+####    """
+####
+####    #looper for multiprocessing
+####    looper = []
+####
+####
+####    #Total intensity measurement
+####    tot_I = 0
+####    for key in fcs.keys():
+####        tot_I += np.sum(fcs[key]['rea_cur'])
+####
+####
+####    sc_range = 0.1
+####    #on the first loop do not update
+####    if cur_err > 1e30:
+####        dis_vdf_bad = dis_vdf_guess
+####
+####    else:
+####        #Add Guassian 2D perturbation
+####        #create Vper and Vpar VDF with pertabation from first key because VDF is the same for all FC
+####        #use 3% of total width for Gaussian kernals instead of 10% 2018/09/19 J. Prchlik
+####        kernal_size = cur_err/tot_I*100.
+####        
+####        dis_vdf_bad = mdv.make_discrete_vdf_random(dis_vdf_guess,sc_range=sc_range,p_sig=3.,q_sig=3.)
+####                        
+####
+####    #loop over all fc in fcs to populate with new VDF guess
+####    for i,key in enumerate(fcs.keys()):
+####        #add variation and store which faraday cup you are working with using key
+####        #Updated with varying integration sampling function 2018/10/12 J. Prchlik
+####        inpt_x = fcs[key]['x_meas'].copy()
+####        g_vdf  = dis_vdf_bad.copy()
+####        peak   =  fcs[key]['peak'].copy()
+####        looper.append((inpt_x,g_vdf,peak,key))
+####
+####    #process in parallel
+####    pool = Pool(processes=nproc)
+####    dis_cur = pool.map(proc_wrap,looper)
+####    pool.close()
+####    pool.join()
+####
+####    #break into index value in looper and the 1D current distribution
+####    index   = np.array(zip(*dis_cur)[1])
+####    dis_cur = np.array(zip(*dis_cur)[0])
+####
+####
+####    #get sum squared best fit
+####    tot_err = np.zeros(dis_cur.shape[0])
+####    #Get error in each faraday cup
+####    for j,i in enumerate(index):
+####         tot_err[j] = np.sum((dis_cur[j,:] - fcs[i]['rea_cur'])**2)
+####
+####    #print(tot_err)
+####    #total error for all fc
+####    #fcs_err = np.median(tot_err)
+####    fcs_err = np.sqrt(np.sum(tot_err))
+####    
+####
+####    #return best VDF and total error
+####    if fcs_err < cur_err:
+####        if verbose:
+####            print('STATS for this run')
+####            print('Old Err = {0:4.3e}'.format(cur_err))
+####            print('New Err = {0:4.3e}'.format(fcs_err))
+####            print('X2 Err = {0:4.3e}'.format(np.sum(np.sum((dis_cur - rea_cur)**2.,axis=1))))
+####            print('Mean Err = {0:4.3e}'.format(tot_err.mean()))
+####            print('Med. Err = {0:4.3e}'.format(np.median(tot_err)))
+####            print('Max. Err = {0:4.3e}'.format(np.max(tot_err)))
+####            print('Min. Err = {0:4.3e}'.format(np.min(tot_err)))
+####            print(tot_err)
+####            print('##################')
+####        #updated measured currents
+####        for j,i in enumerate(index):
+####            fcs[i]['dis_cur'] = dis_cur[j]
+####        return fcs,fcs_err,dis_vdf_bad
+####    #If no improvement just return the pervious value
+####    else:
+####        return fcs,cur_err,dis_vdf_guess
+####    
 
 
 #start time for comp
@@ -174,8 +175,8 @@ time_start = time.time()
 #                    Vx  ,  Vy,  Vz ,Wper,Wpar, Np
 #pls_par = np.array([-380., -30., 30., 20., 40., 5.]) 
 #pls_par = np.array([-580., 10., -10., 40., 120., 15.]) 
-#pls_par = np.array([-480., -100., -80., 20., 50., 25.]) 
-pls_par = np.array([-380., -100., 50., 30., 10., 50.]) 
+pls_par = np.array([-480., -100., -80., 20., 50., 25.]) 
+#pls_par = np.array([-380., -100., 50., 30., 10., 50.]) 
 #pls_par = np.array([-880., 100.,-150., 30., 10., 5.]) 
 #mag_par = np.array([np.cos(np.radians(75.))*np.cos(.1), np.sin(np.radians(75.))*np.cos(.1), np.sin(.1)]) 
 #mag_par = np.array([np.cos(np.radians(25.)),np.sin(np.radians(25.)), 0.]) 
@@ -379,7 +380,7 @@ pls_par_bad = np.array([vx, vy, vz,we,wa,n])
 #wa, we =  mdv.find_best_vths(wa,we,pls_par_bad,mag_par,fcs[key]['rea_cur'],fcs[key]['x_meas'])
 
 #update with new Wper and Wpar paraemters
-pls_par_bad = np.array([vx, vy, vz,we,wa,n])
+#pls_par_bad = np.array([vx, vy, vz,we,wa,2])
 
 ######################################################################
 ######################################################################
@@ -410,6 +411,12 @@ print('LOOK HERE FOR OFF PEAK END')
 
 
 
+
+#var_grid = mff.get_variation_grid(fcs,dis_vdf_bad_guess,p_num=5,q_num=5,a_scale=1.)
+#
+#raise
+#
+
 #######Give info on best fit versus real solution######
 print(pls_par)
 print(pls_par_bad)
@@ -423,16 +430,26 @@ n_p_prob = np.array([0.5,0.5])
 
 #Inital bad sum squared error value
 tot_err = 1e31 #a very large number
+per_err = .10
+
+#whether a given p, q value improved the fit
+improved = False
+ip,iq = 0.,0.
 
 start_loop = time.time()
 #takes about 1000 iterations to converge (~30 minutes), but converged to the wrong solution, mostly overestimated the peak
 #removed to test improving fit
-for i in range(30000):
+for i in range(10):
     #get a new vdf and return if it is the best fit
     #dis_vdf_bad,tot_error,dis_cur = create_random_vdf(dis_vdf_bad,nproc,n_p_prob)
-    fcs,tot_err,dis_vdf_bad = create_random_vdf_multi_fc(fcs,nproc,tot_err,dis_vdf_bad,cont)
+    print('##############################################')
+    print(ip,iq,n_p_prob)
+    fcs,tot_err,dis_vdf_bad,improved,ip,iq,n_p_prob = mff.create_random_vdf_multi_fc(fcs,nproc,tot_err,dis_vdf_bad,cont,
+                                                                            improved=improved,ip=ip,iq=iq,n_p_prob=n_p_prob,
+                                                                            sc_range=per_err)
+    per_err = tot_err
 
-    print('Total error for iteration {0:1d} is {1:4.3e}'.format(i,float(tot_err)))
+    print('Total error for iteration {0:1d} is {1:4.3e}%'.format(i,100.*float(tot_err)))
     #get probability modification for addition and subtraction
     #per_err  = np.sum(-(dis_cur-rea_cur)/rea_cur)/100.
     #n_p_prob = np.array([0.5,0.5])#+per_err*np.array([-1.,1.])
