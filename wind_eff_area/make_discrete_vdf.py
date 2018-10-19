@@ -275,6 +275,8 @@ def make_discrete_vdf_random(dis_vdf,improved=False,sc_range=0.1,p_sig=10.,q_sig
 def convert_fc_gse(fc_cor,phi_ang,theta_ang):
     """
     Convert GSE coordinates to faraday cup coordinates
+    The - sign in phi_ang comes from the definition used in Arfken, Weber, and Harris  compared to what
+    I meant when I set up the problem
 
     Parameters
     ----------
@@ -296,7 +298,7 @@ def convert_fc_gse(fc_cor,phi_ang,theta_ang):
     #######Brought back 2018/09/12 J. Prchlik
     #simplified with two rotation matrix 2018/10/04 J. Prchlik
     ######get rotation matrix
-    rot_mat = rotation_matrix(phi_ang,theta_ang,psi_ang=0.)
+    rot_mat = rotation_matrix(-phi_ang,theta_ang,psi_ang=0.)
     rot_cor = rotation_matrix(-np.pi/2.,-np.pi/2.,psi_ang=0.)
     #removed Transpose 2018/10/03 J. Prchlik because of changed rotation matrix definition
     #convert back to Right handed definition in GSE coordinates
@@ -451,6 +453,8 @@ def convert_gse_fc(gse_cor,phi_ang,theta_ang):
     """
     Convert GSE coordinates to faraday cup coordinates. Faraday cup coordiantes have positive Z pointing toward the receiving cup normal
     and positive X in the upperward direction in a right handed coordinate system.
+    The - sign in phi_ang comes from the definition used in Arfken, Weber, and Harris  compared to what
+    I meant when I set up the problem
 
     Parameters
     ----------
@@ -471,7 +475,7 @@ def convert_gse_fc(gse_cor,phi_ang,theta_ang):
 
 
     #switched to simplier euler angle transformation 2018/10/03 J. Prchlik
-    rot_mat = rotation_matrix(phi_ang,theta_ang)
+    rot_mat = rotation_matrix(-phi_ang,theta_ang)
     rot_cor = rotation_matrix(-np.pi/2.,-np.pi/2.)
     p_grid  = rot_mat.dot(rot_cor).T.dot(gse_cor)
 
@@ -728,6 +732,7 @@ def arb_p_response(x_meas,dis_vdf,samp):
 
         inp = np.array([fc_vlo,fc_vhi,phi_ang,theta_ang])
 
+        #Do the integration for a given cup velocity range
         out = fc_meas(dis_vdf,inp,samp=samp)
         #print(out)
         dis_cur.append(out)
@@ -737,7 +742,7 @@ def arb_p_response(x_meas,dis_vdf,samp):
     return dis_cur
 
 #
-def fc_meas(vdf,fc,fov_ang=45.,sc ='wind',samp=10000):
+def fc_meas(vdf,fc,fov_ang=45.,sc ='wind',samp=10):
     """
     Get the spacecraft measurement of the VDF
 
@@ -753,7 +758,7 @@ def fc_meas(vdf,fc,fov_ang=45.,sc ='wind',samp=10000):
         Spacecraft effective area to use (Default = 'wind')
   
     samp: int, optional
-        Number of samples to use when doing the Monte Carlo Integration (Default = 10000)
+       Sampling frequency in km/s
 
     Return:
     ---------
@@ -779,6 +784,11 @@ def fc_meas(vdf,fc,fov_ang=45.,sc ='wind',samp=10000):
     hold_ifunc = vdf['vdf_func']
 
 
+    #get the angle GSE and magnetic field
+    phi_mag_fc = np.arctan2(hold_bfc[1],hold_bfc[0])
+    the_mag_fc = np.arcsin(hold_bfc[2])
+
+
     #create vx limits
     vx_lim_min = lambda vz: -vz*np.tan(np.radians(fov_ang))
     vx_lim_max = lambda vz: vz*np.tan(np.radians(fov_ang))
@@ -787,19 +797,30 @@ def fc_meas(vdf,fc,fov_ang=45.,sc ='wind',samp=10000):
     vy_lim_max = lambda vz,vx: np.sqrt((vz*np.tan(np.radians(fov_ang)))**2- vx**2)
 
 
+
+    #Get angle between magnetic field normal and the FC
+    bn_phi,bn_theta = np.arctan2(hold_bfc[1],hold_bfc[0]),np.arcsin(hold_bfc[2])
+
+    #create rotation matrix from fc normal to b normal
+    #need - sign due to Arfken, Webber, and Harris definition
+    fc_bn_rot = rotation_matrix(-bn_phi,bn_theta)
+
+    #Use set velocity resolution to find change values in GSE coordinates while trying to sample 
+    #consistent values in p',q',r' coordinates
+    dx,dy,dz = np.abs(fc_bn_rot.dot(np.zeros(3)+samp))
+
+    #get maximum number of samples for array creation
+    x_samp = (vx_lim_max(fc_vhi)-vx_lim_min(fc_vhi))/samp
+    y_samp = (vy_lim_max(fc_vhi,0)-vy_lim_min(fc_vhi,0))/samp
+
+
     #create function with input parameters for int_3d
     #int_3d_inp = partial(int_3d,spacecraft=sc,ufc=hold_ufc,bfc=hold_bfc,qgrid=hold_qgrid,pgrid=hold_pgrid,vdf=hold_vdf)
     args = (sc,hold_ufc,hold_bfc,hold_ifunc)
         
-    #meas = tplquad(int_3d, fc_vlo, fc_vhi, vx_lim_min, vx_lim_max, vy_lim_min, vy_lim_max, epsabs=1.e-4, epsrel=1.e-4,args=args)
-   
-    #meas = mci.mc_trip(int_3d, fc_vlo, fc_vhi, vx_lim_min, vx_lim_max, vy_lim_min, vy_lim_max,args=args,samp=samp)
-    #meas = mci.mp_trip(int_3d, fc_vlo, fc_vhi, vx_lim_min, vx_lim_max, vy_lim_min, vy_lim_max,args=args,samp=samp)
+    #Updated with constant p',q', and r' coordinates
     meas = mci.mp_trip_cython(int_3d, fc_vlo, fc_vhi, vx_lim_min, vx_lim_max, vy_lim_min, vy_lim_max,args=args,samp=samp)
-    #meas = mci.mp_trip2(int_3d, fc_vlo, fc_vhi, vx_lim_min, vx_lim_max, vy_lim_min, vy_lim_max,args=args,samp=samp)
-    #meas = mci.mp_trip3(int_3d, fc_vlo, fc_vhi, vx_lim_min, vx_lim_max, vy_lim_min, vy_lim_max,args=args,samp=samp)
-    #vz, vx, vy = sympy.symbols('vz vx vy')
-    #meas = sympy.integrate(int_3d(vz,vx,vy,*args),(vz,fc_vol,fc_vhi),(vx,vx_lim_min,vx_lim_max),(vy,vy_lim_min,vy_lim_max))
+    #meas = mci.mp_trip_cython_pqr(int_3d, fc_vlo, fc_vhi, vx_lim_min, vx_lim_max, vy_lim_min, vy_lim_max,args=args,samp=samp)
 
     return meas
 
@@ -961,12 +982,12 @@ def vdf_calc(vx,vy,vz,hold_bfc=[1,1,1],hold_ufc=[1,1,1],hold_ifunc=lambda p,q: p
     #print(max(p),min(p))
     q = np.sqrt( (vx-ux)**2 + (vy-uy)**2 + (vz-uz)**2 - p**2)
     ###print('start ps and qs')
-    ######print(ux,uy,uz)
-    ######print(bx,by,bz)
-    ###print(p.min(),q.min())
-    ###print(p.mean(),q.mean())
-    ###print(p.max(),q.max())
-    ###print('end ps and qs')
+    ###print(ux,uy,uz)
+    ###print(bx,by,bz)
+    ####print(p.min(),q.min())
+    ####print(p.mean(),q.mean())
+    ####print(p.max(),q.max())
+    ####print('end ps and qs')
 
 
 
