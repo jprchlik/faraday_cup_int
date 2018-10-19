@@ -7,7 +7,7 @@ from scipy.optimize import curve_fit
 
 
 def proc_wrap(arg):
-    return [mdv.arb_p_response_dyn_samp(*arg[:-1]),arg[-1]]
+    return [mdv.arb_p_response(*arg[:-1]),arg[-1]]
 
 def make_discrete_vdf_add_fixed_kernal(dis_vdf,p,q,a_scale=0.1,p_sig=10.,q_sig=10.):
     """
@@ -128,7 +128,7 @@ def get_variation_grid(fcs,dis_vdf,p_num=10,q_num=10,a_scale=0.1,nproc=10):
                     inpt_x = fcs[key]['x_meas'].copy()
                     g_vdf  = dis_vdf_bad.copy()
                     peak   =  fcs[key]['peak'].copy()
-                    looper.append((inpt_x,g_vdf,peak,key))
+                    looper.append((inpt_x,g_vdf,3.,key))
 
                 #process in parallel
                 pool = Pool(processes=nproc)
@@ -172,7 +172,7 @@ def get_variation_grid(fcs,dis_vdf,p_num=10,q_num=10,a_scale=0.1,nproc=10):
     return err_arr
 
 
-def create_random_vdf_multi_fc(fcs,nproc,cur_err,dis_vdf_guess,cont,improved=False,samp=30,verbose=False,ip=0.,iq=0.,n_p_prob=[0.5,0.5],sc_range=0.1):
+def create_random_vdf_multi_fc(fcs,nproc,cur_err,dis_vdf_guess,cont,improved=False,samp=3.,verbose=False,ip=0.,iq=0.,n_p_prob=[0.5,0.5],sc_range=0.1):
     """
     Parameters
     -----------
@@ -270,7 +270,7 @@ def create_random_vdf_multi_fc(fcs,nproc,cur_err,dis_vdf_guess,cont,improved=Fal
         inpt_x = fcs[key]['x_meas'].copy()
         g_vdf  = dis_vdf_bad.copy()
         peak   =  fcs[key]['peak'].copy()
-        looper.append((inpt_x,g_vdf,peak,key))
+        looper.append((inpt_x,g_vdf,samp,key))
 
     #process in parallel
     pool = Pool(processes=nproc)
@@ -322,9 +322,13 @@ def create_random_vdf_multi_fc(fcs,nproc,cur_err,dis_vdf_guess,cont,improved=Fal
         else:
             n_p_prob[0] = 1
 
+        #Whether to repeat the try nearby ord not
+        #only replace if it reduces the error by greater than 1%
+        repeat  = np.abs(fcs_err-cur_err)/cur_err > 0.01
+
         #Only keep previous coordinate if imporovment is better than 1 part in 100
         #if np.absfcs_err-cur_err)/cur_err > 0.01:
-        return fcs,fcs_err,dis_vdf_bad,True,ip,iq,n_p_prob
+        return fcs,fcs_err,dis_vdf_bad,repeat,ip,iq,n_p_prob
         #else:
         #    return fcs,fcs_err,dis_vdf_bad,False,ip,iq,n_p_prob
     #If no improvement just return the pervious value
