@@ -42,8 +42,10 @@ def solve_sing_decomp(phi,theta):
     #create vector of FC observaitons
     r_vec = np.zeros((ncup,npar))
     #Include - sign in phi because of opposite of GSE phi (which is how phi is defined) when FC normal points towards the Sun
-    r_vec[:,0] = np.cos(-phi) * np.cos(theta)
-    r_vec[:,1] = np.sin(-phi) * np.cos(theta)
+    #removed because I now fixed the conversion in GSE coordinates. It had to do with how Arfken, Weber, and Harris defined
+    #phi and theta
+    r_vec[:,0] = np.cos(phi) * np.cos(theta)
+    r_vec[:,1] = np.sin(phi) * np.cos(theta)
     r_vec[:,2] = np.sin(theta)
 
     
@@ -804,14 +806,28 @@ def fc_meas(vdf,fc,fov_ang=45.,sc ='wind',samp=10):
     #create rotation matrix from fc normal to b normal
     #need - sign due to Arfken, Webber, and Harris definition
     fc_bn_rot = rotation_matrix(-bn_phi,bn_theta)
+    #flip so z FC is the normal
+    fc_cr_rot = rotation_matrix(-np.pi/2.,np.pi/2.)
 
     #Use set velocity resolution to find change values in GSE coordinates while trying to sample 
     #consistent values in p',q',r' coordinates
-    dx,dy,dz = np.abs(fc_bn_rot.dot(np.zeros(3)+samp))
+    dx,dy,dz = np.abs((fc_bn_rot.dot(fc_cr_rot)).dot(np.zeros(3)+samp))
 
     #get maximum number of samples for array creation
-    x_samp = (vx_lim_max(fc_vhi)-vx_lim_min(fc_vhi))/samp
-    y_samp = (vy_lim_max(fc_vhi,0)-vy_lim_min(fc_vhi,0))/samp
+    z_samp = (fc_vhi-fc_vhi)/dz
+    x_samp = (vx_lim_max(fc_vhi)-vx_lim_min(fc_vhi))/dx
+    y_samp = (vy_lim_max(fc_vhi,0)-vy_lim_min(fc_vhi,0))/dy
+
+    #max number of samples at 1000.
+    z_samp,x_samp,y_samp = 1000.*np.array([z_samp,x_samp,y_samp])/(z_samp+x_samp+y_samp)
+
+    #make sure at least 1 sample in a given direction
+    if z_samp < 1:
+        z_samp = 1
+    if x_samp < 1:
+        x_samp = 1
+    if y_samp < 1:
+        y_samp = 1
 
 
     #create function with input parameters for int_3d
@@ -819,8 +835,9 @@ def fc_meas(vdf,fc,fov_ang=45.,sc ='wind',samp=10):
     args = (sc,hold_ufc,hold_bfc,hold_ifunc)
         
     #Updated with constant p',q', and r' coordinates
-    meas = mci.mp_trip_cython(int_3d, fc_vlo, fc_vhi, vx_lim_min, vx_lim_max, vy_lim_min, vy_lim_max,args=args,samp=samp)
-    #meas = mci.mp_trip_cython_pqr(int_3d, fc_vlo, fc_vhi, vx_lim_min, vx_lim_max, vy_lim_min, vy_lim_max,args=args,samp=samp)
+    #meas = mci.mp_trip_cython(int_3d, fc_vlo, fc_vhi, vx_lim_min, vx_lim_max, vy_lim_min, vy_lim_max,args=args,samp=samp)
+    meas = mci.mp_trip_cython_pqr(int_3d, fc_vlo, fc_vhi, vx_lim_min, vx_lim_max, vy_lim_min, vy_lim_max,
+                                  int(z_samp),int(x_samp),int(y_samp),args=args)
 
     return meas
 
