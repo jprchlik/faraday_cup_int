@@ -13,7 +13,7 @@ def gaus(x,a,x0,sigma):
     return a*np.exp(-(x-x0)**2/(2*sigma**2))
 
 def proc_wrap(arg):
-    return [mdv.arb_p_response_dyn_samp(*arg[:-1]),arg[-1]]
+    return [mdv.arb_p_response(*arg[:-1]),arg[-1]]
 
 def create_random_vdf(dis_vdf_guess,nproc,n_p_prob):
     """
@@ -180,7 +180,7 @@ pls_par = np.array([-480., -100., -80., 20., 50., 25.])
 #pls_par = np.array([-880., 100.,-150., 30., 10., 5.]) 
 #mag_par = np.array([np.cos(np.radians(75.))*np.cos(.1), np.sin(np.radians(75.))*np.cos(.1), np.sin(.1)]) 
 #mag_par = np.array([np.cos(np.radians(25.)),np.sin(np.radians(25.)), 0.]) 
-mag_par = np.array([1.,0., 0.]) 
+mag_par = np.array([-1.,0., 0.]) 
 
 #Set up observering condidtions before making any VDFs
 #veloity grid
@@ -202,6 +202,8 @@ cont  = 1.e12/(waeff*q0*dv*grid_v)
 
 #number of sample for integration
 samp = 4.5e1
+#Changed to mean km/s in p,q space 2018/10/19
+samp = 1.5e1
 #make a discrete VDF
 #updated clip to a velocity width 2018/10/12 J. Prchlik
 #Set to a "Total velocity width" which could be measured by the space craft 2018/10/15
@@ -260,7 +262,10 @@ for k,(phi,theta) in enumerate(zip(phis,thetas)):
     rad_phi,rad_theta = np.radians((phi,theta))
     pro_unt = np.array([np.cos(rad_phi)*np.cos(rad_theta),np.sin(rad_phi)*np.cos(rad_theta),np.sin(rad_theta)])
     peak = np.abs(pls_par[:3].dot(pro_unt))
-    rea_cur = mdv.arb_p_response_dyn_samp(x_meas,dis_vdf,peak)
+    #here sampling is in km/s
+    rea_cur = mdv.arb_p_response(x_meas,dis_vdf,samp)
+    #switched back to static sampling but now using p',q',r' for sampling
+    #rea_cur = mdv.arb_p_response_dyn_samp(x_meas,dis_vdf,peak)
 
     #create key for input fc
     key = 'fc_{0:1d}'.format(k)
@@ -342,7 +347,7 @@ fc_mag_ang = np.abs(fc_vec.dot(mag_par))
 
 #Get Wper and Wpar vectors using SVD and the magnetic field vectors
 wv_par =  mdv.compute_gse_from_fit(np.radians(phis[top5]),np.radians(thetas[top5]),w_angl[top5]) 
-wa = wv_par.dot(mag_par)
+wa = np.abs(wv_par.dot(mag_par))
 we = np.sqrt(np.linalg.norm(wv_par)**2.-wv_par.dot(mag_par)**2.)
 
 
@@ -404,7 +409,7 @@ for k,i in enumerate(fcs.keys()):
     i = 'fc_{0:1d}'.format(k)
     #fcs[i]['init_guess'] = mdv.arb_p_response(fcs[i]['x_meas'],dis_vdf_bad_guess,samp)
     #updated using dynamic sampling 2018/10/12 J. Prchlik
-    fcs[i]['init_guess'] = mdv.arb_p_response_dyn_samp(fcs[i]['x_meas'],dis_vdf_bad_guess,fcs[i]['peak'])
+    fcs[i]['init_guess'] = mdv.arb_p_response(fcs[i]['x_meas'],dis_vdf_bad_guess,samp)
     #fcs[i]['init_guess'] = mdv.arb_p_response(fcs[i]['x_meas'],dis_vdf_bad_guess,samp)
 
 print('LOOK HERE FOR OFF PEAK END')
@@ -439,14 +444,14 @@ ip,iq = 0.,0.
 start_loop = time.time()
 #takes about 1000 iterations to converge (~30 minutes), but converged to the wrong solution, mostly overestimated the peak
 #removed to test improving fit
-for i in range(10):
+for i in range(80000):
     #get a new vdf and return if it is the best fit
     #dis_vdf_bad,tot_error,dis_cur = create_random_vdf(dis_vdf_bad,nproc,n_p_prob)
     print('##############################################')
     print(ip,iq,n_p_prob)
     fcs,tot_err,dis_vdf_bad,improved,ip,iq,n_p_prob = mff.create_random_vdf_multi_fc(fcs,nproc,tot_err,dis_vdf_bad,cont,
                                                                             improved=improved,ip=ip,iq=iq,n_p_prob=n_p_prob,
-                                                                            sc_range=per_err)
+                                                                            sc_range=per_err,samp=samp)
     per_err = tot_err
 
     print('Total error for iteration {0:1d} is {1:4.3e}%'.format(i,100.*float(tot_err)))
