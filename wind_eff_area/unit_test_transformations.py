@@ -288,6 +288,8 @@ def test_pars_one_fc_1(plot=False):
 
     #number of sample for integration aming for 2 part in 1,000
     samp = 6.9e1
+    #switched to km/s in p',q',r' space 2018/10/19 J. Prchlik
+    samp = 1.5e1
     #make a discrete VDF
     #Switched to clipping in km/s 2018/10/19 J. Prchlk
     dis_vdf = mdv.make_discrete_vdf(pls_par,mag_par,pres=1.00,qres=1.00,clip=200.)
@@ -366,6 +368,8 @@ def test_pars_one_fc_2(plot=False):
 
     #number of sample for integration aming for 2 part in 1,000
     samp = 4.5e1
+    #switched to km/s in p',q',r' space 2018/10/19 J. Prchlik
+    samp = 1.0e1
     #make a discrete VDF
     dis_vdf = mdv.make_discrete_vdf(pls_par,mag_par,pres=1.00,qres=1.00,clip=200.)
 
