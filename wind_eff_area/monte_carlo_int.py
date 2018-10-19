@@ -339,3 +339,64 @@ def mp_trip_cython(int_3d,z_lo,z_hi,x_lo,x_hi,y_lo,y_hi,args=(),samp=70):
  
 
 
+def mp_trip_cython_pqr(int_3d,z_lo,z_hi,x_lo,x_hi,y_lo,y_hi,z_samp,x_samp,y_samp,args=()):
+    """
+    Midpoint integral using Cython to build an array of x,dx,y,dy,z,dz arrays. It was built
+    for intregration to compute a RDF for the solar wind but can be used for any integral.
+    Note the Z,X,Y convention is left over from the IDL convention. The integration works
+    by integrating over z then x then y.
+   
+    Parameters
+    ---------- 
+    int_3d: function
+        A function to integrate over. Can be any 3D function defined in python.
+    z_lo: float
+        The lower limit to integrate over in the z variable
+    z_hi: float
+        The upper limit to integrate over in the z variable
+    x_lo: function
+        The lower bound for the x variable in integration. If you want a constant
+        you can define x_lo = z: z*0+C
+    x_hi: function
+        The upper bound for the x variable in integration. If you want a constant
+        you can define x_hi = z: z*0+C
+    y_lo: function
+        The lower bound for the y variable in integration. If you want a constant
+        you can define y_lo = z,x: z*x*0+C
+    y_hi: function
+        The upper bound for the y variable in integration. If you want a constant
+        you can define y_hi = z,x: z*x*0+C
+    z_samp: int
+        Number of samples in the z direction.
+    x_samp: int
+        Number of samples in the x direction.
+    y_samp: int
+        Number of samples in the y direction.
+    args: tuple,optional
+        Tuple of arguments to pass to a function.
+   
+    Returns
+    -------
+    area_cal: float
+        The integral of the given function over the given limits
+    """
+
+    #Total number of the samples
+    samp = z_samp*x_samp*y_samp
+    #use Cython function to create array for loop
+    arr = mpl.create_mid_point_arr_pqr_samp(z_lo,z_hi,x_lo, x_hi, y_lo, y_hi,samp,z_samp,x_samp,y_samp)
+
+    #time_mp_s = time.time()
+    #Outputs in the following coordinates
+    #Z,dZ,X,dX,Y,dY
+    arr = np.asarray(arr)
+    #compute the integral using midpoint integration
+    #Use the same Y,X,Z as used by scipy tplquad
+    area_cal = np.sum(int_3d(arr[:,4],arr[:,2],arr[:,0],*args)*np.prod(arr[:,1::2],axis=1))
+    #time_mp_e = time.time()
+    #print('Time to run Int. Calc. {0:2.1f}'.format(time_mp_e-time_mp_s))
+
+    return area_cal
+ 
+
+
