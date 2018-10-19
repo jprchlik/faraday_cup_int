@@ -5,6 +5,34 @@ import matplotlib.pyplot as plt
 from fancy_plot import fancy_plot
 
 
+def s1(alpha):
+    """
+    Euler rotation matrix with only a rotation in alpha (phi)
+    """
+    s1_mat = np.array([[np.cos(alpha),np.sin(alpha),0.],
+                       [-np.sin(alpha),np.cos(alpha),0.],
+                       [0.,0.,1.]]) 
+    return s1_mat
+
+def s2(beta):
+    """
+    Euler rotation matrix with only a rotation in beta (theta)
+    """
+    s2_mat = np.array([[np.cos(beta),0.,-np.sin(beta)],
+                       [0.,1.,0.], 
+                       [np.sin(beta),0.,np.cos(beta)]])
+    return s2_mat
+   
+def s3(gamma):
+    """
+    Euler rotation matrix with only a rotation in gamma (psi)
+    """
+    s3_mat = np.array([[np.cos(gamma),np.sin(gamma),0.],
+                       [-np.sin(gamma),np.cos(gamma),0.],
+                       [0.,0.,1.]]) 
+    return s3_mat
+   
+   
 def gaus(x,a,x0,sigma):
     """
     Simple Gaussian function
@@ -52,6 +80,7 @@ def get_coor_2():
     return fc_vec,theta, phi
 
 
+
 def get_vec_1():
     """
     Get a vector of coordinates
@@ -67,6 +96,18 @@ def get_vec_2():
     #some X,Y,Z values in coordiante system
     vec = np.array([-1500.,15.,-10.])
     return vec
+
+def get_vec_3():
+    """
+    A vector of coordinates to prove I am not crazy
+    """
+
+    #a normal vector describing the pointing of the FC in GSE coordinates
+    vec = np.array([1.,5.,10.])
+    #some phi and theta ancels between the GSE coordinates and FC observations
+    return vec
+
+
 
 def test_gse_fc_gse_transform():
     """
@@ -139,6 +180,49 @@ def test_gse_fc_transform():
     #value should be [np.array([-10.,-15.,-1500.])
     assert np.allclose(fc_vec,np.array([15.,-10.,-1500.]))
 
+def test_fc_gse_transform_2():
+    """
+    Test the faraday cup coordiante system transformation in the code from GSE to FC 
+    """
+
+
+    #get a set of coordinates and phi angles between faraday cup and GSE coordiantes
+    #a normal vector in the FC coordinate system
+    #rotate at many angles to make sure transformation work
+    vec,theta,phi = get_coor_2()
+    
+
+    #Convert the GSE coordinates into FC coordinates given theta and phi
+    fc_vec_00   = mdv.convert_gse_fc(vec,0.,0.)
+    fc_vec_pi20 = mdv.convert_gse_fc(vec,np.pi/2.,0.)
+    fc_vec_0pi2 = mdv.convert_gse_fc(vec,0.,np.pi/2.)
+   
+
+    assert np.allclose(fc_vec_00,np.array([0.,0.,1.]))
+    assert np.allclose(fc_vec_00,np.array([-1.,0.,0.]))
+    assert np.allclose(fc_vec_00,np.array([0.,-1.,0.]))
+
+def test_gse_fc_transform_2():
+    """
+    Test the faraday cup coordiante system transformation in the code from GSE to FC 
+    """
+
+
+    #get a set of coordinates and phi angles between faraday cup and GSE coordiantes
+    #a normal vector in the FC coordinate system
+    #rotate at many angles to make sure transformation work
+    vec = get_vec_3()
+    
+
+    #Convert the GSE coordinates into FC coordinates given theta and phi
+    fc_vec_00   = mdv.convert_gse_fc(vec,0.,0.)
+    fc_vec_pi20 = mdv.convert_gse_fc(vec,np.pi/2.,0.)
+    fc_vec_0pi2 = mdv.convert_gse_fc(vec,0.,np.pi/2.)
+   
+
+    assert np.allclose(fc_vec_00,np.array([5.,10.,1.]))
+    assert np.allclose(fc_vec_pi20,np.array([-1.,10.,5.]))
+    assert np.allclose(fc_vec_0pi2,np.array([5.,-1.,10.]))
 
 def pls_par_1():
     """
@@ -203,9 +287,10 @@ def test_pars_one_fc_1(plot=False):
     phi,theta = np.degrees([phi,theta])
 
     #number of sample for integration aming for 2 part in 1,000
-    samp = 4.5e1
+    samp = 6.9e1
     #make a discrete VDF
-    dis_vdf = mdv.make_discrete_vdf(pls_par,mag_par,pres=1.00,qres=1.00,clip=4.)
+    #Switched to clipping in km/s 2018/10/19 J. Prchlk
+    dis_vdf = mdv.make_discrete_vdf(pls_par,mag_par,pres=1.00,qres=1.00,clip=200.)
 
     #measurement velocity grid
     dv = 15
@@ -254,13 +339,16 @@ def test_pars_one_fc_1(plot=False):
 
 
     err_val = np.sqrt(np.sum((rea_cur-col_cur)**2))/np.sum(col_cur)
-    
-    #Test error value is within tolerance
-    assert err_val < 2e-3
 
     #plot if keyword set
     if plot:
+        mdv.plot_vdf(dis_vdf)
         plt.show()
+    
+    #Test error value is within tolerance
+    print(err_val)
+    assert err_val < 2e-3
+
 
 def test_pars_one_fc_2(plot=False):
     """
@@ -275,12 +363,11 @@ def test_pars_one_fc_2(plot=False):
 
     #get phi and theta for particular input values
     phi,theta = -10,4
-    print(phi,theta)
 
     #number of sample for integration aming for 2 part in 1,000
     samp = 4.5e1
     #make a discrete VDF
-    dis_vdf = mdv.make_discrete_vdf(pls_par,mag_par,pres=1.00,qres=1.00,clip=4.)
+    dis_vdf = mdv.make_discrete_vdf(pls_par,mag_par,pres=1.00,qres=1.00,clip=200.)
 
     #measurement velocity grid
     dv = 15
@@ -311,12 +398,27 @@ def test_pars_one_fc_2(plot=False):
     ax.set_ylabel('p/cm$^{-3}$/(km/s)')
 
     if plot:
+        mdv.plot_vdf(dis_vdf)
         plt.show()
-
+      
     err_val = np.sqrt(np.sum((rea_cur-col_cur)**2))/np.sum(col_cur)
     print(err_val)
     #Test error value is within tolerance
     assert err_val < 2e-3
+
+
+def test_rotation_matrix():
+    """
+    Compare rotation matrix to one derived from the dot of 3 different rotations
+    """
+   
+    phi,theta,psi = np.zeros(3)+np.pi/2.
+
+
+    rot_mat_1 = mdv.rotation_matrix(phi,theta,psi_ang=psi)
+    rot_mat_2 = (s1(phi).dot(s2(theta))).dot(s3(psi))
+
+    assert np.allclose(rot_mat_1,rot_mat_2)
 
 if __name__ == '__main__':
     """
@@ -328,10 +430,18 @@ if __name__ == '__main__':
     ####Test that FC to GSE to FC transformation returns the same values
     test_fc_gse_fc_transform()
 
+    ###run a couple more tests
+    test_gse_fc_transform_2()
+    ###run a couple more tests
+    #test_fc_gse_transform_2()
+
     #Test that GSE to FC transformation works
     test_gse_fc_transform()
 
 
+    #test rotation matrix is the same from function and 3 R3 rotations
+    test_rotation_matrix()
+
     #test you get reasonable answers when you shove everything right down on FC
     test_pars_one_fc_1(plot=False)
-    test_pars_one_fc_2(plot=True)
+    test_pars_one_fc_2(plot=False)
