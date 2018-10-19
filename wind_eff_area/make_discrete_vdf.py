@@ -221,7 +221,7 @@ def make_discrete_vdf_random(dis_vdf,improved=False,sc_range=0.1,p_sig=10.,q_sig
     rawvdf = dis_vdf['vdf']
 
     #normalized probabilities to vary
-    normval = rawvdf/np.sum(rawvdf)
+    normval = np.log10(rawvdf)/np.sum(np.log10(rawvdf))
    
 
     #grab some value on the q,p grid use the input VDF to inform the prior
@@ -233,8 +233,8 @@ def make_discrete_vdf_random(dis_vdf,improved=False,sc_range=0.1,p_sig=10.,q_sig
         q_grab = float(local_state.normal(loc=iq,scale=q_sig,size=1))#,p=normval.ravel()))
     #Do no guess in same area if adding a Gaussian did not improve the fit 2018/10/18 J. Prchlik
     else:
-        p_grab = float(local_state.choice(pgrid.ravel(),size=1))#,p=normval.ravel()))
-        q_grab = float(local_state.choice(qgrid.ravel(),size=1))#,p=normval.ravel()))
+        p_grab = float(local_state.choice(pgrid.ravel(),size=1,p=normval.ravel()))
+        q_grab = float(local_state.choice(qgrid.ravel(),size=1,p=normval.ravel()))
 
     
     #try either adding or subtracting
@@ -819,15 +819,15 @@ def fc_meas(vdf,fc,fov_ang=45.,sc ='wind',samp=10):
     y_samp = (vy_lim_max(fc_vhi,0)-vy_lim_min(fc_vhi,0))/dy
 
     #max number of samples at 1000.
-    z_samp,x_samp,y_samp = 1000.*np.array([z_samp,x_samp,y_samp])/(z_samp+x_samp+y_samp)
+    z_samp,x_samp,y_samp = 400.*np.array([z_samp,x_samp,y_samp])/(z_samp+x_samp+y_samp)
 
     #make sure at least 1 sample in a given direction
-    if z_samp < 1:
-        z_samp = 1
-    if x_samp < 1:
-        x_samp = 1
-    if y_samp < 1:
-        y_samp = 1
+    if z_samp < 2:
+        z_samp = 2
+    if x_samp < 2:
+        x_samp = 2
+    if y_samp < 2:
+        y_samp = 2
 
 
     #create function with input parameters for int_3d
