@@ -3,7 +3,8 @@ from scipy.interpolate import RectBivariateSpline
 import numpy as np
 from multiprocessing import Pool
 from scipy.optimize import curve_fit
-
+import matplotlib.pyplot as plt
+from fancy_plot import fancy_plot
 
 
 def proc_wrap(arg):
@@ -442,3 +443,66 @@ def create_grid_vals_multi_fc(fcs,proc,cur_err,dis_vdf_guess,cont,verbose=False)
         return fcs,cur_err,dis_vdf_guess
     
 
+def create_fc_grid_plot(fcs,waeff=3.8e6,q0=1.6021892e-7):
+    """
+    Plot multiple FC on one grid of plots
+
+    Parameters
+    ----------
+    fcs: dictionary
+        Dictionary of FC measurements
+    waeff: float, optional
+        Effective array of FC  (Default = 3.8e6 #cm^3/km, Wind)
+    q0: float
+        Some constant I can't recally this moment (Default  = 1.6021892e-7 # picocoulombs)
+
+    Return
+    -------
+    fig, ax: Figure Object, Axis Object
+        The created plots figure and axis objects
+    """
+
+
+
+    #create a square as possible plot
+    nrows = int(np.sqrt(len(fcs.keys())))
+    ncols = len(fcs.keys())/nrows
+    #add an extra column if needed
+    if nrows*ncols < len(fcs.keys()): 
+        ncols += 1
+       
+    
+    #create figure to plot
+    fig, axs = plt.subplots(ncols=ncols,nrows=nrows,sharex=True,sharey=True,figsize=(3*ncols,3*nrows))
+    fig.subplots_adjust(wspace=0.01,hspace=0.01)
+    counter = 0
+    for k,ax in zip(range(len(fcs.keys())),axs.ravel()):
+        key = 'fc_{0:1d}'.format(k)
+
+        #first column of x_measure is the velocity grid
+        grid_v = fcs[key]['x_meas'][0,:]
+        dv    = np.diff(grid_v)
+        dv    = np.concatenate([dv,[dv[-1]]])
+        cont  = 1.e12/(waeff*q0*dv*grid_v)
+
+        #removed to test improving Gaussian fit
+        ax.plot(grid_v,fcs[key]['dis_cur'].ravel()*cont,label='Best MC',color='black',linewidth=3)
+        ax.plot(grid_v,fcs[key]['rea_cur'].ravel()*cont,'-.b',label='Input',linewidth=3)
+        #ax.plot(grid_v,rea_cur.ravel()*cont,'-.b',label='Input',linewidth=3)
+        ax.plot(grid_v,fcs[key]['init_guess'].ravel()*cont,':',color='purple',label='Init. Guess',linewidth=3)
+        ax.text(0.05,0.8,'$\Phi$={0:2.1f}$^\circ$\n$\Theta$={1:2.1f}$^\circ$'.format(*np.degrees(fcs[key]['x_meas'][[2,3],0])),transform=ax.transAxes)
+        #ax.plot(grid_v, gaus(grid_v,*popt),'--',marker='o',label='Gauss Fit',linewidth=3)
+        fancy_plot(ax)
+        #ax.set_yscale('log')
+        #only plot x-label if in the last row
+        if counter >= (nrows-1)*(ncols):
+           ax.set_xlabel('Speed [km/s]')
+        #set ylabel on the left edge
+        if np.isclose(float(counter)/ncols - int(counter/ncols),0):
+            ax.set_ylabel('p/cm$^{-3}$/(km/s)')
+        #put legend only on the first plot
+        if counter == 0:
+            ax.legend(loc='best',frameon=False)
+        counter += 1
+
+    return fig,axs
