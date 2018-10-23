@@ -454,7 +454,7 @@ def find_best_vths(wa,we,pls_par,mag_par,rea_cur,inpt_x,pres=1.00,qres=1.00,wara
 def convert_gse_fc(gse_cor,phi_ang,theta_ang):
     """
     Convert GSE coordinates to faraday cup coordinates. Faraday cup coordiantes have positive Z pointing toward the receiving cup normal
-    and positive X in the upperward direction in a right handed coordinate system.
+    and positive X to the right in a right handed coordinate system.
     The - sign in phi_ang comes from the definition used in Arfken, Weber, and Harris  compared to what
     I meant when I set up the problem
 
@@ -511,7 +511,7 @@ def make_fc_meas(dis_vdf,fc_spd=np.arange(300,600,15),fc_phi=-15.,fc_theta=-15):
                x[1,:]          v_delta   [km/s] 
                x[2,:]          phi_ang (yaw) [rad] 
                x[3,:]          theta_ang (pitch) [rad] 
-               x[4,:]      b in FC "x" pointing upwards
+               x[4,:]      b in FC "x" pointing right
                x[5,:]      b in FC "y"
                x[6,:]      b in FC "z" normal to cup
     """
@@ -576,6 +576,126 @@ def plot_vdf(dis_vdf):
     ax.set_ylabel(r'V$_\perp$ [km/s]',fontsize=22)
 
     return fig,ax
+
+def plot_pq_lim_fc(x_meas,dis_vdf,fov_ang=45.):
+    """
+    Plots the limits of the FC in pq space
+
+    Parameters
+    ----------
+    x_meas: np.array
+               x[0,:]          v_window  [km/s] 
+               x[1,:]          v_delta   [km/s] 
+               x[2,:]          phi_ang (yaw) [rad] 
+               x[3,:]          theta_ang (pitch) [rad] 
+               x[4,:]      b in FC "x" pointing right
+               x[5,:]      b in FC "y"
+               x[6,:]      b in FC "z" normal to cup
+    dis_vdf: dictionary
+         A dictionary returned from make_discrete_vdf
+    fov_ang: float, optional
+        The limiting FoV angle for the FC (Default = 45)
+
+    Returns
+    ---------
+        fig, ax objects
+    """
+    import matplotlib.pyplot as plt
+
+    #set state of the faraday cup
+    fc_state_vlo = x_meas[0,:]-.5*x_meas[1,:] 
+    fc_state_vhi = x_meas[0,:]+.5*x_meas[1,:] 
+    fc_state_phi = x_meas[2,:]
+    fc_state_tht = x_meas[3,:]
+
+    #"Measured" Bx,By, and Bz values in FC
+    hold_bfc = x_meas[4:7,0]#convert_gse_fc(dis_vdf['b_gse'],phi_ang,theta_ang)
+
+    #create rotation matrix between FC and magnetic field normal
+    #So that the magnetic field normal in FC reference frame maps
+    #to (p',q',r') = (1,0,0) in the magnetic field frame
+    rot_mat = arb_rotation_matrix(hold_bfc,[1.,0.,0.])
+
+    for i in range( x_meas[0,:].size):
+        
+        #get parameters for each faraday cup value
+        fc_vlo    = fc_state_vlo[i]
+        fc_vhi    = fc_state_vhi[i]
+        phi_ang   = fc_state_phi[i]
+        theta_ang = fc_state_tht[i]
+
+        #radius in velocity space of the fc measurement
+        fc_rad = fc_vhi
+
+        #Get sample of Xfc,Yfc coordinats
+        phis = np.linspace(0.,2.*np.pi,200)
+        fc_x, fc_y = fc_vhi*np.cos(phis),fc_vhi*np.sin(phis)
+        fc_z_lo = fc_vlo+np.zeros(fc_x.size) 
+        fc_z_hi = fc_vhi+np.zeros(fc_x.size) 
+
+        #create Nx3 array for sampling
+        fc_x = np.concatenate([fc_x,fc_x])
+        fc_y = np.concatenate([fc_y,fc_y])
+        fc_z = np.concatenate([fc_z_lo,fc_z_hi])
+        fc_xyz = np.vstack([fc_x,fc_y,fc_z])
+
+        #convert faraday cup coordinates into p',q',r' coordinates
+        fc_pqr = rot_mat.dot(fc_xyz)
+      
+        #convert from p',q',r' to p,q
+        fc_p = fc_pqr[0]
+        fc_q = np.sqrt(fc_pqr[2]**2+fc_pqr[1]**2)
+
+
+
+    #Added static Contour levels 2018/10/12 J. Prchlik
+    n_levels = 10
+    contour_levels = np.arange(0,2*n_levels+1,2)-4-n_levels*2
+
+    fig, ax = plt.subplots(figsize=(8,6))
+
+    plotc = ax.pcolormesh(dis_vdf['pgrid'],dis_vdf['qgrid'],np.log10(dis_vdf['vdf']),vmin=-19,vmax=-5)
+    ax.contour(dis_vdf['pgrid'],dis_vdf['qgrid'],np.log10(dis_vdf['vdf']), contour_levels,colors='black',linestyles='dashed',linewidths=3 )
+    cbar = fig.colorbar(plotc)
+    cbar.set_label('Normalized Dist. [s$^{3}$cm$^{-3}$km$^{-3}$]',fontsize=18)
+
+    ax.set_xlabel(r'V$_\parallel$ [km/s]',fontsize=22)
+    ax.set_ylabel(r'V$_\perp$ [km/s]',fontsize=22)
+
+    return fig,ax
+
+
+def arb_rotation_matrix(a,b):
+    """
+    Creates a rotation matrix between two unit vectors a and b.
+    U.dot(a) = b
+ 
+    Parameters
+    ------------
+    a,b: np.array
+        Two 3 element numpy array unit vectors
+
+    Returns
+    -----------
+    rot_mat: np.array
+        3x3 rotation matrix between unit vectors
+    
+    """
+   
+    v = np.cross(a,b)
+    s = np.linalg.norm(v)
+    c = np.dot(a,b)
+ 
+    I = np.identity(3)
+
+    #skew-symmetric cross product of matrix v
+    vx = np.array([[0,-v[2],v[1]],
+                   [v[2],0,-v[0]],
+                   [-v[1],v[0],0]])
+
+    rot_mat = I+vx+vx.dot(vx)/(1+c)
+    return rot_mat
+                  
 
 def sample_function(z_min,z_max,z_peak,max_s=45,min_s=30,wid_s=100):
     """
