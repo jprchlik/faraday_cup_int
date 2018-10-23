@@ -32,6 +32,21 @@ def s3(gamma):
                        [0.,0.,1.]]) 
     return s3_mat
    
+def gol_d(phi):
+    s1_mat = np.array([[np.cos(phi),np.sin(phi),0.],
+                       [-np.sin(phi),np.cos(phi),0.],
+                       [0.,0.,1.]]) 
+    return s1_mat
+def gol_c(theta):
+    """
+    Euler rotation matrix with only a rotation in theta (theta)
+    xyz convention
+    """
+    s2_mat = np.array([[np.cos(theta),0.,-np.sin(theta)],
+                       [0.,1.,0.], 
+                       [np.sin(theta),0.,np.cos(theta)]])
+    return s2_mat
+    
    
 def gaus(x,a,x0,sigma):
     """
