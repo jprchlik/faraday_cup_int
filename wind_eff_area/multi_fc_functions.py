@@ -254,7 +254,7 @@ def create_random_vdf_multi_fc(fcs,nproc,cur_err,dis_vdf_guess,cont,improved=Fal
         #Add Guassian 2D perturbation
         #create Vper and Vpar VDF with pertabation from first key because VDF is the same for all FC
         #use 3% of total width for Gaussian kernals instead of 10% 2018/09/19 J. Prchlik
-        kernal_size = cur_err/tot_I*100.
+        kernal_size = cur_err*100. # Switched so current error is a percent/tot_I*100. 2018/10/24 J. Prchlik
         if kernal_size > 30:
             kernal_size = 30.
         
@@ -325,7 +325,7 @@ def create_random_vdf_multi_fc(fcs,nproc,cur_err,dis_vdf_guess,cont,improved=Fal
 
         #Whether to repeat the try nearby ord not
         #only replace if it reduces the error by greater than 1%
-        repeat  = np.abs(fcs_err-cur_err)/cur_err > 0.01
+        repeat  = np.abs(fcs_err-cur_err)/cur_err > 0.0001
 
         #Only keep previous coordinate if imporovment is better than 1 part in 100
         #if np.absfcs_err-cur_err)/cur_err > 0.01:
