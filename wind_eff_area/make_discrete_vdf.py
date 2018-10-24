@@ -229,8 +229,9 @@ def make_discrete_vdf_random(dis_vdf,improved=False,sc_range=0.1,p_sig=10.,q_sig
     #Try weighting by the predicted VDF 2018/10/03 J. Prchlik
     #Grad point in the same area if previous gaussian improved fit
     if improved:
-        p_grab = float(local_state.normal(loc=ip,scale=p_sig,size=1))#,p=normval.ravel()))
-        q_grab = float(local_state.normal(loc=iq,scale=q_sig,size=1))#,p=normval.ravel()))
+        #Added reduced Gaussian width 2018/10/24 J. Prchlik
+        p_grab = float(local_state.normal(loc=ip,scale=p_sig/2.,size=1))#,p=normval.ravel()))
+        q_grab = float(local_state.normal(loc=iq,scale=q_sig/2.,size=1))#,p=normval.ravel()))
     #Do no guess in same area if adding a Gaussian did not improve the fit 2018/10/18 J. Prchlik
     else:
         p_grab = float(local_state.choice(pgrid.ravel(),size=1,p=normval.ravel()))
@@ -601,6 +602,19 @@ def plot_pq_lim_fc(x_meas,dis_vdf,fov_ang=45.):
         fig, ax objects
     """
     import matplotlib.pyplot as plt
+    fig, ax = plt.subplots(figsize=(8,6))
+    #Added static Contour levels 2018/10/12 J. Prchlik
+    n_levels = 10
+    contour_levels = np.arange(0,2*n_levels+1,2)-4-n_levels*2
+
+
+    plotc = ax.pcolormesh(dis_vdf['pgrid'],dis_vdf['qgrid'],np.log10(dis_vdf['vdf']),vmin=-19,vmax=-5)
+    ax.contour(dis_vdf['pgrid'],dis_vdf['qgrid'],np.log10(dis_vdf['vdf']), contour_levels,colors='black',linestyles='dashed',linewidths=3 )
+    cbar = fig.colorbar(plotc)
+    cbar.set_label('Normalized Dist. [s$^{3}$cm$^{-3}$km$^{-3}$]',fontsize=18)
+
+    ax.set_xlabel(r'V$_\parallel$ [km/s]',fontsize=22)
+    ax.set_ylabel(r'V$_\perp$ [km/s]',fontsize=22)
 
     #set state of the faraday cup
     fc_state_vlo = x_meas[0,:]-.5*x_meas[1,:] 
@@ -611,12 +625,16 @@ def plot_pq_lim_fc(x_meas,dis_vdf,fov_ang=45.):
     #"Measured" Bx,By, and Bz values in FC
     hold_bfc = x_meas[4:7,0]#convert_gse_fc(dis_vdf['b_gse'],phi_ang,theta_ang)
 
+    #"Measured" Vx,Vy, and Vz values in FC
+    hold_ufc = convert_gse_fc(dis_vdf['u_gse'],fc_state_phi[0],fc_state_tht[0])
+
     #create rotation matrix between FC and magnetic field normal
     #So that the magnetic field normal in FC reference frame maps
     #to (p',q',r') = (1,0,0) in the magnetic field frame
     rot_mat = arb_rotation_matrix(hold_bfc,[1.,0.,0.])
 
-    for i in range( x_meas[0,:].size):
+    #for i in range( x_meas[0,:].size):
+    for i in (0, x_meas[0,:].size-1):
         
         #get parameters for each faraday cup value
         fc_vlo    = fc_state_vlo[i]
@@ -630,37 +648,70 @@ def plot_pq_lim_fc(x_meas,dis_vdf,fov_ang=45.):
         #Get sample of Xfc,Yfc coordinats
         phis = np.linspace(0.,2.*np.pi,200)
         fc_x, fc_y = fc_vhi*np.cos(phis),fc_vhi*np.sin(phis)
-        fc_z_lo = fc_vlo+np.zeros(fc_x.size) 
-        fc_z_hi = fc_vhi+np.zeros(fc_x.size) 
+        fc_z_lo = 1.*fc_vlo+np.zeros(fc_x.size)
+        fc_z_hi = 1.*fc_vhi+np.zeros(fc_x.size)
 
+        ####print(fc_vhi)
+        ####print(max(fc_x),min(fc_x))
+        ####print(max(fc_x),min(fc_y))
+        ####print(dis_vdf['u_gse'])
+        ####print(np.degrees([phi_ang,theta_ang]))
+        ####print(hold_ufc)
         #create Nx3 array for sampling
-        fc_x = np.concatenate([fc_x,fc_x])
-        fc_y = np.concatenate([fc_y,fc_y])
-        fc_z = np.concatenate([fc_z_lo,fc_z_hi])
-        fc_xyz = np.vstack([fc_x,fc_y,fc_z])
+        #fc_x = np.concatenate([fc_x,fc_x])
+        #fc_y = np.concatenate([fc_y,fc_y])
+        #fc_z = np.concatenate([fc_z_lo,fc_z_hi])
+        fc_xyz_hi = np.vstack([fc_x-hold_ufc[0],fc_y-hold_ufc[1],fc_z_hi+hold_ufc[2]])
+        fc_xyz_lo = np.vstack([fc_x-hold_ufc[0],fc_y-hold_ufc[1],fc_z_lo+hold_ufc[2]])
 
         #convert faraday cup coordinates into p',q',r' coordinates
-        fc_pqr = rot_mat.dot(fc_xyz)
+        fc_pqr_hi = rot_mat.dot(fc_xyz_hi)
+        fc_pqr_lo = rot_mat.dot(fc_xyz_lo)
       
         #convert from p',q',r' to p,q
-        fc_p = fc_pqr[0]
-        fc_q = np.sqrt(fc_pqr[2]**2+fc_pqr[1]**2)
+        fc_p_hi = fc_pqr_hi[0]
+        fc_q_hi = np.sqrt(fc_pqr_hi[2]**2+fc_pqr_hi[1]**2)
+        #convert from p',q',r' to p,q
+        fc_p_lo = fc_pqr_lo[0]
+        fc_q_lo = np.sqrt(fc_pqr_lo[2]**2+fc_pqr_lo[1]**2)
 
+        #test dot product
+        dot_test_p_hi = hold_bfc.dot(fc_xyz_hi)
+        dot_test_p_lo = hold_bfc.dot(fc_xyz_lo)
+        dot_test_q_hi = np.sqrt(np.sum(fc_xyz_hi**2,axis=0)-dot_test_p_hi**2)
+        dot_test_q_lo = np.sqrt(np.sum(fc_xyz_lo**2,axis=0)-dot_test_p_lo**2)
 
+        ####print('#########################')
+        ####print('Pvals')
+        ####print(max(fc_p_hi),min(fc_p_hi))
+        ####print(max(fc_p_lo),min(fc_p_lo))
+        ####print(max(dot_test_p_hi),min(dot_test_p_hi))
+        ####print(max(dot_test_p_lo),min(dot_test_p_lo))
+        ####print('#########################')
+        ####print('#########################')
+        ####print('Qvals')
+        ####print(max(fc_q_hi),min(fc_q_hi))
+        ####print(max(fc_q_lo),min(fc_q_lo))
+        ####print(max(dot_test_q_hi),min(dot_test_q_hi))
+        ####print(max(dot_test_q_lo),min(dot_test_q_lo))
+        ####print('#########################')
+        #plot the new p and q limits
+        #plot the new p and q limits
+        if i == 0:
+            #plot lower limit
+            ax.plot(fc_p_lo,fc_q_lo,'-r')
+            #store first p,q values of lower limit
+            fp_p,fp_q = fc_p_lo[0],fc_q_lo[0]
+            #store last p,q values of lower limit
+            lp_p,lp_q = fc_p_lo[-1],fc_q_lo[-1]
+        else:
+            #plot upper limit
+            ax.plot(fc_p_hi,fc_q_hi,'-r')
 
-    #Added static Contour levels 2018/10/12 J. Prchlik
-    n_levels = 10
-    contour_levels = np.arange(0,2*n_levels+1,2)-4-n_levels*2
+    #complete pbox of FC measurements
+    #ax.plot([fp_p,fc_p_hi[0]],[fp_q,fc_q_hi[0]],'-r')
+    #ax.plot([lp_p,fc_p_hi[-1]],[lp_q,fc_q_hi[-1]],'-r')
 
-    fig, ax = plt.subplots(figsize=(8,6))
-
-    plotc = ax.pcolormesh(dis_vdf['pgrid'],dis_vdf['qgrid'],np.log10(dis_vdf['vdf']),vmin=-19,vmax=-5)
-    ax.contour(dis_vdf['pgrid'],dis_vdf['qgrid'],np.log10(dis_vdf['vdf']), contour_levels,colors='black',linestyles='dashed',linewidths=3 )
-    cbar = fig.colorbar(plotc)
-    cbar.set_label('Normalized Dist. [s$^{3}$cm$^{-3}$km$^{-3}$]',fontsize=18)
-
-    ax.set_xlabel(r'V$_\parallel$ [km/s]',fontsize=22)
-    ax.set_ylabel(r'V$_\perp$ [km/s]',fontsize=22)
 
     return fig,ax
 
@@ -921,17 +972,23 @@ def fc_meas(vdf,fc,fov_ang=45.,sc ='wind',samp=10):
 
 
     #Get angle between magnetic field normal and the FC
-    bn_phi,bn_theta = np.arctan2(hold_bfc[1],hold_bfc[0]),np.arcsin(hold_bfc[2])
+    ###bn_phi,bn_theta = np.arctan2(hold_bfc[1],hold_bfc[0]),np.arcsin(hold_bfc[2])
 
-    #create rotation matrix from fc normal to b normal
-    #need - sign due to Arfken, Webber, and Harris definition
-    fc_bn_rot = rotation_matrix(-bn_phi,bn_theta)
-    #flip so z FC is the normal
-    fc_cr_rot = rotation_matrix(-np.pi/2.,np.pi/2.)
+    ####create rotation matrix from fc normal to b normal
+    ####need - sign due to Arfken, Webber, and Harris definition
+    ###fc_bn_rot = rotation_matrix(-bn_phi,bn_theta)
+    ####flip so z FC is the normal
+    ###fc_cr_rot = rotation_matrix(-np.pi/2.,np.pi/2.)
 
+    #Switch to more efficent matrix rotation
+    #create rotation matrix between FC and magnetic field normal
+    #So that the magnetic field normal in FC reference frame maps
+    #to (p',q',r') = (1,0,0) in the magnetic field frame
+    rot_mat = arb_rotation_matrix(hold_bfc,[1.,0.,0.])
     #Use set velocity resolution to find change values in GSE coordinates while trying to sample 
     #consistent values in p',q',r' coordinates
-    dx,dy,dz = np.abs((fc_bn_rot.dot(fc_cr_rot)).dot(np.zeros(3)+samp))
+    dx,dy,dz = np.abs(rot_mat.dot(np.zeros(3)+samp))
+
 
     #get maximum number of samples for array creation
     z_samp = (fc_vhi-fc_vhi)/dz
