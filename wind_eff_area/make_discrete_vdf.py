@@ -157,7 +157,7 @@ def make_discrete_vdf(pls_par,mag_par,pres=0.5,qres=0.5,clip=300.):
     dis_vdf = {'vdf':rawvdf,'pgrid':pgrid,'qgrid':qgrid,'u_gse':u_gse,'b_gse':mag_par,'vdf_func':f}
     return dis_vdf
 
-def make_discrete_vdf_random(dis_vdf,improved=False,sc_range=0.1,p_sig=10.,q_sig=10.,n_p_prob=[0.5,0.5],ip=0.,iq=0.):
+def make_discrete_vdf_random(dis_vdf,normval,improved=False,sc_range=0.1,p_sig=10.,q_sig=10.,n_p_prob=[0.5,0.5],ip=0.,iq=0.):
     """
     Returns Discrete Velocity distribution function given a set of input parameters. With random variations 
     in the raw vdf
@@ -169,6 +169,10 @@ def make_discrete_vdf_random(dis_vdf,improved=False,sc_range=0.1,p_sig=10.,q_sig
         Dictionary containing a discrete VDF function ['vdf'], the propogating direction grid ['pgrid'],
         the perpendicular to the propogating direction grid ['qgrid'], velocity vector in gse ['u_gse'],
         the normal magnetic field vector ['b_gse'] and a BiVariateSpline interpolation function ['vdf_func'].   
+    normval: np.array
+        A numpy array with the same shape as the p and q grids, which is the probability of selecting a point 
+        any where on the grid. The grid should be updated in a way that guesses that improve the fit are favored 
+        over guess that do not.
     improved: boolean, optional
         Whether the previous iteration improved the fit (Default = False)
     sc_range: float,optional
@@ -221,7 +225,7 @@ def make_discrete_vdf_random(dis_vdf,improved=False,sc_range=0.1,p_sig=10.,q_sig
     rawvdf = dis_vdf['vdf']
 
     #normalized probabilities to vary
-    normval = np.log10(rawvdf)/np.sum(np.log10(rawvdf))
+    #normval = np.log10(rawvdf)/np.sum(np.log10(rawvdf))
    
 
     #grab some value on the q,p grid use the input VDF to inform the prior
