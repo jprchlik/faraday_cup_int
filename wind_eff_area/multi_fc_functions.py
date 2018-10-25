@@ -173,7 +173,7 @@ def get_variation_grid(fcs,dis_vdf,p_num=10,q_num=10,a_scale=0.1,nproc=10):
     return err_arr
 
 
-def create_random_vdf_multi_fc(fcs,nproc,cur_err,dis_vdf_guess,cont,improved=False,samp=3.,verbose=False,ip=0.,iq=0.,n_p_prob=[0.5,0.5],sc_range=0.1):
+def create_random_vdf_multi_fc(fcs,nproc,cur_err,dis_vdf_guess,cont,pred_grid,improved=False,samp=3.,verbose=False,ip=0.,iq=0.,n_p_prob=[0.5,0.5],sc_range=0.1):
     """
     Parameters
     -----------
@@ -185,6 +185,10 @@ def create_random_vdf_multi_fc(fcs,nproc,cur_err,dis_vdf_guess,cont,improved=Fal
         Current sum squared errors between the observations and the integrated VDF
     dis_vdf_guess: np.array
         The current best fit 2D VDF guess
+    pred_grid: np.array
+        A numpy array with the same shape as the p and q grids, which is the probability of selecting a point 
+        any where on the grid. The grid should be updated in a way that guesses that improve the fit are favored 
+        over guess that do not.
     improved: boolean, optional
         Whether the previous iteration improved the fit (Default = False)
     samp : int, optional
@@ -259,7 +263,7 @@ def create_random_vdf_multi_fc(fcs,nproc,cur_err,dis_vdf_guess,cont,improved=Fal
             kernal_size = 30.
         
         #Get the new velocity distribution and the location and sign of the added Gaussian
-        dis_vdf_bad,ip,iq,n_p = mdv.make_discrete_vdf_random(dis_vdf_guess,improved=improved,sc_range=sc_range,
+        dis_vdf_bad,ip,iq,n_p = mdv.make_discrete_vdf_random(dis_vdf_guess,pred_grid,improved=improved,sc_range=sc_range,
                                                          p_sig=kernal_size,q_sig=kernal_size,ip=ip,iq=iq,
                                                          n_p_prob=n_p_prob)
                         
