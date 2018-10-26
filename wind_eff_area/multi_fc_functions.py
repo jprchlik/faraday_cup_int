@@ -10,7 +10,7 @@ from fancy_plot import fancy_plot
 def proc_wrap(arg):
     return [mdv.arb_p_response(*arg[:-1]),arg[-1]]
 
-def make_discrete_vdf_add_fixed_kernal(dis_vdf,p,q,a_scale=0.1,p_sig=10.,q_sig=10.):
+def make_discrete_vdf_add_fixed_kernel(dis_vdf,p,q,a_scale=0.1,p_sig=10.,q_sig=10.):
     """
     Returns Discrete Velocity distribution function given a set of input parameters. With fixed variations 
     in the raw vdf
@@ -23,9 +23,9 @@ def make_discrete_vdf_add_fixed_kernal(dis_vdf,p,q,a_scale=0.1,p_sig=10.,q_sig=1
         the perpendicular to the propogating direction grid ['qgrid'], velocity vector in gse ['u_gse'],
         the normal magnetic field vector ['b_gse'] and a BiVariateSpline interpolation function ['vdf_func'].   
     p: int
-        The p-value used for the adding the Gaussian Kernal
+        The p-value used for the adding the Gaussian kernel
     q: int
-        The q-value used for the adding the Gaussian Kernal
+        The q-value used for the adding the Gaussian kernel
     a_scale: float,optional
         Range to vary the input VDF as a fraction of the current value at a given (p,q) (Default = 0.1)
     p_sig: float,optional
@@ -74,7 +74,7 @@ def make_discrete_vdf_add_fixed_kernal(dis_vdf,p,q,a_scale=0.1,p_sig=10.,q_sig=1
 
 def get_variation_grid(fcs,dis_vdf,p_num=10,q_num=10,a_scale=0.1,nproc=10):
     """
-    Returns grid of error values when adding a grid of Gaussian kernals
+    Returns grid of error values when adding a grid of Gaussian kernels
 
     Parameters:
     -----------
@@ -85,9 +85,9 @@ def get_variation_grid(fcs,dis_vdf,p_num=10,q_num=10,a_scale=0.1,nproc=10):
         the perpendicular to the propogating direction grid ['qgrid'], velocity vector in gse ['u_gse'],
         the normal magnetic field vector ['b_gse'] and a BiVariateSpline interpolation function ['vdf_func'].   
     p_num: int,optional
-        Number of p values to use when computing a grid of values to compute the effect of varying by a Gaussian kernal
+        Number of p values to use when computing a grid of values to compute the effect of varying by a Gaussian kernel
     q_num: int,optional
-        Number of q values to use when computing a grid of values to compute the effect of varying by a Gaussian kernal
+        Number of q values to use when computing a grid of values to compute the effect of varying by a Gaussian kernel
     a_scale: float,optional
         Range to vary the input VDF as a fraction of the current value at a given (p,q) (Default = 0.1)
     n_proc: int, optional
@@ -116,8 +116,8 @@ def get_variation_grid(fcs,dis_vdf,p_num=10,q_num=10,a_scale=0.1,nproc=10):
         for q in qs:
             for s in pn:
 
-                #compute added Gaussian kernal at fixed position
-                dis_vdf_bad = make_discrete_vdf_add_fixed_kernal(dis_vdf,p,q,a_scale=a_scale*s)
+                #compute added Gaussian kernel at fixed position
+                dis_vdf_bad = make_discrete_vdf_add_fixed_kernel(dis_vdf,p,q,a_scale=a_scale*s)
                 
                 #variables to pass to parrallel processing
                 looper = []
@@ -173,7 +173,7 @@ def get_variation_grid(fcs,dis_vdf,p_num=10,q_num=10,a_scale=0.1,nproc=10):
     return err_arr
 
 
-def create_random_vdf_multi_fc(fcs,nproc,cur_err,dis_vdf_guess,cont,pred_grid,improved=False,samp=3.,verbose=False,ip=0.,iq=0.,n_p_prob=[0.5,0.5],sc_range=0.1):
+def create_random_vdf_multi_fc(fcs,nproc,cur_err,dis_vdf_guess,cont,pred_grid,kernel,improved=False,samp=3.,verbose=False,ip=0.,iq=0.,n_p_prob=[0.5,0.5],sc_range=0.1):
     """
     Parameters
     -----------
@@ -189,6 +189,8 @@ def create_random_vdf_multi_fc(fcs,nproc,cur_err,dis_vdf_guess,cont,pred_grid,im
         A numpy array with the same shape as the p and q grids, which is the probability of selecting a point 
         any where on the grid. The grid should be updated in a way that guesses that improve the fit are favored 
         over guess that do not.
+    kernel: float
+        The size of the Gaussian kernel to use in both the p and q directions
     improved: boolean, optional
         Whether the previous iteration improved the fit (Default = False)
     samp : int, optional
@@ -198,10 +200,10 @@ def create_random_vdf_multi_fc(fcs,nproc,cur_err,dis_vdf_guess,cont,pred_grid,im
     verbose: boolean
         Print Chi^2 min values when a solution improves the fit
     ip: float, optional
-        Location of the last Gaussian kernal guess in the P coordinate (Default = 0.). If improved is true then
+        Location of the last Gaussian kernel guess in the P coordinate (Default = 0.). If improved is true then
         this coordinate improved the fit and will be used for the next guess.
     iq: float, optional
-        Location of the last Gaussian kernal guess in the Q coordinate (Default = 0.). If improved is true then
+        Location of the last Gaussian kernel guess in the Q coordinate (Default = 0.). If improved is true then
         this coordinate improved the fit and will be used for the next guess.
     n_p_prob: list or np.array, optional
         The probability of selecting a positive or negative gaussian. The first element is the probability
@@ -221,10 +223,10 @@ def create_random_vdf_multi_fc(fcs,nproc,cur_err,dis_vdf_guess,cont,pred_grid,im
     improved: boolean, optional
         Whether the previous iteration improved the fit (Default = False)
     ip: float, optional
-        Location of the last Gaussian kernal guess in the P coordinate (Default = 0.). If improved is true then
+        Location of the last Gaussian kernel guess in the P coordinate (Default = 0.). If improved is true then
         this coordinate improved the fit and will be used for the next guess.
     iq: float, optional
-        Location of the last Gaussian kernal guess in the Q coordinate (Default = 0.). If improved is true then
+        Location of the last Gaussian kernel guess in the Q coordinate (Default = 0.). If improved is true then
         this coordinate improved the fit and will be used for the next guess.
     n_p_prob: list or np.array, optional
         The probability of selecting a positive or negative gaussian. The first element is the probability
@@ -257,14 +259,12 @@ def create_random_vdf_multi_fc(fcs,nproc,cur_err,dis_vdf_guess,cont,pred_grid,im
     else:
         #Add Guassian 2D perturbation
         #create Vper and Vpar VDF with pertabation from first key because VDF is the same for all FC
-        #use 3% of total width for Gaussian kernals instead of 10% 2018/09/19 J. Prchlik
-        kernal_size = cur_err*100. # Switched so current error is a percent/tot_I*100. 2018/10/24 J. Prchlik
-        if kernal_size > 30:
-            kernal_size = 30.
+        #use 3% of total width for Gaussian kernels instead of 10% 2018/09/19 J. Prchlik
+        kernel_size = kernel # Switched so current error is a percent/tot_I*100. 2018/10/24 J. Prchlik
         
         #Get the new velocity distribution and the location and sign of the added Gaussian
         dis_vdf_bad,ip,iq,n_p = mdv.make_discrete_vdf_random(dis_vdf_guess,pred_grid,improved=improved,sc_range=sc_range,
-                                                         p_sig=kernal_size,q_sig=kernal_size,ip=ip,iq=iq,
+                                                         p_sig=kernel_size,q_sig=kernel_size,ip=ip,iq=iq,
                                                          n_p_prob=n_p_prob)
                         
 
@@ -387,10 +387,10 @@ def create_grid_vals_multi_fc(fcs,proc,cur_err,dis_vdf_guess,cont,verbose=False)
     else:
         #Add Guassian 2D perturbation
         #create Vper and Vpar VDF with pertabation from first key because VDF is the same for all FC
-        #use 3% of total width for Gaussian kernals instead of 10% 2018/09/19 J. Prchlik
-        kernal_size = 5.
+        #use 3% of total width for Gaussian kernels instead of 10% 2018/09/19 J. Prchlik
+        kernel_size = 5.
         
-        dis_vdf_bad = mdv.make_discrete_vdf_random(dis_vdf_guess,sc_range=sc_range,p_sig=kernal_size,q_sig=kernal_size)
+        dis_vdf_bad = mdv.make_discrete_vdf_random(dis_vdf_guess,sc_range=sc_range,p_sig=kernel_size,q_sig=kernel_size)
                         
 
     #loop over all fc in fcs to populate with new VDF guess
