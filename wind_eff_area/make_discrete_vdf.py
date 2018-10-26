@@ -186,10 +186,10 @@ def make_discrete_vdf_random(dis_vdf,normval,improved=False,sc_range=0.1,p_sig=1
         of selecting a gaussian that removes from the vdf, while the second element is the probability of 
         selecting a gaussian that adds to the vdf. The total probability must sum to 1 (default = [0.5,0.5]).
     ip: float, optional
-        Location of the last Gaussian kernal guess in the P coordinate (Default = 0.). If improved is true then
+        Location of the last Gaussian kernel guess in the P coordinate (Default = 0.). If improved is true then
         this coordinate improved the fit and will be used for the next guess.
     iq: float, optional
-        Location of the last Gaussian kernal guess in the Q coordinate (Default = 0.). If improved is true then
+        Location of the last Gaussian kernel guess in the Q coordinate (Default = 0.). If improved is true then
         this coordinate improved the fit and will be used for the next guess.
 
     Returns:
@@ -203,7 +203,7 @@ def make_discrete_vdf_random(dis_vdf,normval,improved=False,sc_range=0.1,p_sig=1
     q_grab:  float
         The center of the new Gaussian in the q coordinate
     a_scale: float
-        The scale factor of the Gaussian kernal applied to 2D velocity distribution that is either +/-1
+        The scale factor of the Gaussian kernel applied to 2D velocity distribution that is either +/-1
     """
 
     #distribution of velocities in the parallel direction
@@ -271,7 +271,7 @@ def make_discrete_vdf_random(dis_vdf,normval,improved=False,sc_range=0.1,p_sig=1
 
 
     #####
-    #Testing kernal addition 2018/09/14 J. Prchlik
+    #Testing kernel addition 2018/09/14 J. Prchlik
     ####
     #ranvdf = a_scale*a*np.exp(- ((pgrid-p_grab)/p_sig)**2. - ((qgrid-q_grab)/q_sig)**2.)
     
