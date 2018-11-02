@@ -784,7 +784,7 @@ def mc_reconstruct(fcs,nproc,dis_vdf,pred_grid,kernel,iters,
     
         if verbose:
             print(counter) 
-            print('Total error for iteration {0:1d} is {1:4.3e}%'.format(i,100.*float(tot_err)))
+            print('Total error for iteration {0:1d} is {1:4.3f}%'.format(i,100.*float(tot_err)))
 
     return fcs,dis_vdf,pred_grid,kernel,improved,ip,iq,n_p_prob,counter
     
