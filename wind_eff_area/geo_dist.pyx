@@ -1,5 +1,4 @@
 import numpy as np
-cimport numpy as np
 DTYPE = np.float64
 #robost length
 def robost_length(float x0,float x1):
