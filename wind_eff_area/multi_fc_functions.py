@@ -173,7 +173,7 @@ def get_variation_grid(fcs,dis_vdf,p_num=10,q_num=10,a_scale=0.1,nproc=10):
     return err_arr
 
 
-def create_random_vdf_multi_fc(fcs,nproc,cur_err,dis_vdf_guess,cont,pred_grid,kernel,improved=False,samp=3.,verbose=False,ip=0.,iq=0.,n_p_prob=[0.5,0.5],sc_range=0.1):
+def create_random_vdf_multi_fc(fcs,nproc,cur_err,dis_vdf_guess,pred_grid,kernel,improved=False,samp=3.,verbose=False,ip=0.,iq=0.,n_p_prob=[0.5,0.5],sc_range=0.1):
     """
     Parameters
     -----------
@@ -195,8 +195,6 @@ def create_random_vdf_multi_fc(fcs,nproc,cur_err,dis_vdf_guess,cont,pred_grid,ke
         Whether the previous iteration improved the fit (Default = False)
     samp : int, optional
         The number of samples to use in 3D integration
-    cont: np.array
-        Array of floats to convert shape into current
     verbose: boolean
         Print Chi^2 min values when a solution improves the fit
     ip: float, optional
@@ -260,6 +258,7 @@ def create_random_vdf_multi_fc(fcs,nproc,cur_err,dis_vdf_guess,cont,pred_grid,ke
         #Add Guassian 2D perturbation
         #create Vper and Vpar VDF with pertabation from first key because VDF is the same for all FC
         #use 3% of total width for Gaussian kernels instead of 10% 2018/09/19 J. Prchlik
+        #Switched to fixed kernel size 2018/10/25 J. Prchlik
         kernel_size = kernel # Switched so current error is a percent/tot_I*100. 2018/10/24 J. Prchlik
         
         #Get the new velocity distribution and the location and sign of the added Gaussian
@@ -342,7 +341,7 @@ def create_random_vdf_multi_fc(fcs,nproc,cur_err,dis_vdf_guess,cont,pred_grid,ke
         n_p_prob = np.zeros(2)+0.5
         return fcs,cur_err,dis_vdf_guess,False,ip,iq,n_p_prob
     
-def create_grid_vals_multi_fc(fcs,proc,cur_err,dis_vdf_guess,cont,verbose=False):
+def create_grid_vals_multi_fc(fcs,proc,cur_err,dis_vdf_guess,verbose=False):
     """
     Parameters
     -----------
@@ -354,8 +353,6 @@ def create_grid_vals_multi_fc(fcs,proc,cur_err,dis_vdf_guess,cont,verbose=False)
         The current best fit 2D VDF guess
     samp : int, optional
         The number of samples to use in 3D integration
-    cont: np.array
-        Array of floats to convert shape into current
     verbose: boolean
         Print Chi^2 min values when a solution improves the fit
 
@@ -510,3 +507,306 @@ def create_fc_grid_plot(fcs,waeff=3.8e6,q0=1.6021892e-7):
         counter += 1
 
     return fig,axs
+
+def create_multi_fc(dis_vdf,ncup,phi_lim=90.,tht_lim=30.,random_seed=None,v_rng=150.,v_smp=20,i_smp=15):
+    """
+    Create a random distribution of FC between +/- phi and theta limits,
+    where phi is angle between FC normal and positive Xgse and theta is the angle
+    between the XYgse plane and the FC normal. Then make the measurements for the
+    given FC.
+
+    Parameters
+    ----------
+    dis_vdf: dictionary
+        discrete vdf object created by mdv.make_discrete_vdf()
+    ncup: int
+        Number of random FC to create measurement arrays for
+    phi_lim: float, optional
+        The absolute limit of phi angles allowed by the random pull (i.e. +/-phi_lim,
+        Default = 90).
+    tht_lim: float, optional
+        The absolute limit of theta angles allows by the random pull (i.e. +/-tht_lim,
+        Default = 30)
+    random_seed: np.random.RandomState object, optional
+        The random seed to use for selecting a given set of FCs. If None
+        then the code will get its own random state (Default = None).
+    v_rng: float, optional
+        Range of velocities (+/-) in km/s of the "measuring" FC with respect to the peak (Default = 150).
+    v_smp:int
+        Number of measurment bins on the FC (Default = 20)
+    i_smp:int
+        Sampling of the integrating function in p',q',r' coordiantes in km/s (Default = 15)
+
+    Returns
+    ----------
+    fcs: dictionary
+        A dictionary of FC measurements which includes one key for each FC in the form fc_{0:1d}.
+        For each FC is a dictionary containing four keys, which I will now described. 'x_meas' 
+        is a measurement array created by mdv.arb_p_response. 'rea_cur' is what the FC would
+        measure given the x_meas array, the input 2D VDF, and some sampling frequency (i_smp).
+        'peak' is the absolute value of the z component of the velocity in the FC frame.
+        'cont' is the constant to convert the "measured current" into p/cc/(km/s).
+
+    big_arr = np.array
+        An array ncup by 8 np.array of Gaussian measurment of the solar wind parameters according 
+        a given FC orientation. The first column is the speed, 2nd the Gaussian width, 3rd the
+        number density, 4th FC phi angle in radians, 5th FC theta angle in radians, 6th the
+        speed uncertainty, 7th the width uncertainty, and 8th the number density uncertainty.
+    """
+
+
+    #get a random state if one is not given
+    if random_seed == None:
+        random_seed = np.random.RandomState()
+
+
+
+
+    #get random set of phis and theta for a given state
+    phis   = random_seed.uniform(-phi_lim,phi_lim,size=ncup)
+    thetas = random_seed.uniform(-tht_lim,tht_lim,size=ncup)
+
+
+    #plasma_velocties from generated observation
+    pls_par = dis_vdf['u_gse']
+
+
+    #array that store all the fit parameters 
+    big_arr = []
+    #calculate the "real measured reduced response function" for all fc cups
+    fcs = {}
+    for k,(phi,theta) in enumerate(zip(phis,thetas)):
+
+        #rotate velocity into FC coordinates
+        pls_fc = mdv.convert_gse_fc(pls_par,phi,theta)
+
+        #Assume a 45 FoV cut off
+        pls_fc[:2] *= np.cos(np.radians(45.))
+
+        #########################################
+        #Set up observering condidtions before making any VDFs
+        #veloity grid
+        #########################################
+        ######################################
+        #get velocity normal to the FC
+        v_mag = np.sqrt(np.sum(pls_fc**2))
+        grid_v = np.arange(v_mag-v_rng,v_mag+v_rng,v_smp)
+        #switch to linear sampling to make sure all are the same size
+        grid_v = np.linspace(v_mag-v_rng,v_mag+v_rng,v_smp)
+
+        #do not let grid go below 380 km/s
+        if grid_v.min() < 380.:
+            grid_v += 380-grid_v.min()
+        if grid_v.max() > 1300.:
+            grid_v -= 1300-grid_v.max()
+        #get effective area of wind and other coversion parameters
+        waeff = 3.8e6 #cm^3/km
+        q0    = 1.6021892e-7 # picocoulombs
+        dv    = np.diff(grid_v)
+        dv    = np.concatenate([dv,[dv[-1]]])
+        cont  = 1.e12/(waeff*q0*dv*grid_v)
+
+
+        #calculate x_meas array
+        x_meas = mdv.make_fc_meas(dis_vdf,fc_spd=grid_v,fc_phi=phi,fc_theta=theta)
+        #compute the observed current in the instrument
+        #Use dynamic sampling 2018/10/12 J. Prchlik
+        #rea_cur = mdv.arb_p_response(x_meas,dis_vdf,samp)
+        rad_phi,rad_theta = np.radians((phi,theta))
+        #here sampling is in km/s
+        rea_cur = mdv.arb_p_response(x_meas,dis_vdf,i_smp)
+        #switched back to static sampling but now using p',q',r' for sampling
+        #rea_cur = mdv.arb_p_response_dyn_samp(x_meas,dis_vdf,peak)
+    
+        #create key for input fc
+        key = 'fc_{0:1d}'.format(k)
+        fcs[key] = {}
+    
+        #populate key with measurements and parameter 
+        fcs[key]['x_meas']  = x_meas
+        fcs[key]['rea_cur'] = rea_cur
+        fcs[key]['peak']    = v_mag
+        fcs[key]['cont']    = cont
+    
+    
+        #calculate the Gaussian fit of the response
+        try:
+            popt, pcov = curve_fit(gaus,grid_v,rea_cur*cont,p0=[np.nanmax(rea_cur*cont),np.mean(grid_v),np.sqrt(2.)*2*dv[0]],sigma=1./(rea_cur/rea_cur.min()),maxfev=5000)
+        except RuntimeError:
+            #give number that will be thrown out if no fit is found 
+            popt = np.zeros(3)-9999.9
+            pcov = np.zeros((3,3))-9999.9
+    
+    
+        #Switched to computing the average
+        #####get the parameters from the fit
+        u = popt[1] #speed in km/s
+        w = np.abs(popt[2]*np.sqrt(2.)) #thermal speed in km/s
+        n = popt[0]*w*np.sqrt(np.pi) #density in cc
+        ####
+        #####uncertainty in parameters from fit
+        du = np.sqrt(pcov[1,1])
+        dw = np.sqrt(pcov[2,2])
+        dn = np.sqrt(np.pi*((w**2.*pcov[0,0]) + (dw*n)**2))
+    
+    
+        #Add fit parameters with velocity guesses
+        big_arr.append([u,w,n,phi,theta,du,dw,dn])
+    
+    
+    #convert big_arr intop numpy array
+    big_arr = np.array(big_arr)
+
+
+    return fcs,big_arr
+
+def mc_reconstruct(fcs,nproc,dis_vdf,pred_grid,kernel,iters,
+                  tot_err=1e31,improved=False,ip=0.,iq=0.,
+                  n_p_prob=np.array([0.5,0.5]),sc_range=0.1,samp=15,
+                  min_kernel=15.,verbose=False,counter=0,default_grid=None,
+                  tol_cnt=100):
+    """
+    Monte Carlo 2D velocity distribution fuctions 
+ 
+    Parameters
+    ----------
+    fcs: dictionary
+        A dictionary of FC measurements which includes one key for each FC in the form fc_{0:1d}.
+        For each FC is a dictionary containing four keys, which I will now described. 'x_meas' 
+        is a measurement array created by mdv.arb_p_response. 'rea_cur' is what the FC would
+        measure given the x_meas array, the input 2D VDF, and some sampling frequency (i_smp).
+        'peak' is the absolute value of the z component of the velocity in the FC frame.
+        'cont' is the constant to convert the "measured current" into p/cc/(km/s).
+    nproc: int
+        Number of processors to use when integrating FCs.
+    dis_vdf: dictionary
+        discrete vdf object created by mdv.make_discrete_vdf(). Use the dictionary VDF
+        recreated from the "measured" plasma parameters.
+    pred_grid: np.array
+        A probability array to be used when to selecting the location of a new Gaussian
+        kernel location (ip,iq). The sum of the array must be 1 and be the same shape
+        a dis_vdf['pgrid']/vdf_vdf['qgrid'].
+    kernel: float
+        The size of the Gaussian kernel to add or subtract at location ip,iq
+    iters: int
+        The maximum number of iterations before convergence
+    tot_err: float, optional
+        The total sum squared error for each FC normalized by the total signal squared in the FC summed in quadrature
+        (Default 1e31)
+    improved: boolean, optional
+        Whether the last interation of p,q improved the fit (Default = False). Only really
+        useful if running mc_reconstruct multiple times.
+    ip: float, optional
+        The initial point in the p coordiante. Only readlly useful if itering mc_reconstrcturion (Default = 0.)
+    iq: float, optional
+        The initial point in the q coordiante. Only readlly useful if itering mc_reconstrcturion (Default = 0.)
+    n_p_prob: np.array, optional
+        Probability the Gaussian is positive or negative (Default = [0.5,0.5]). The default is 50/50.
+    samp: int, optional
+        The velocity width of the sample points in p,q space
+    min_kernel: float, optional
+        The minimum kernel size used for image reconstruction
+    counter: int, optional
+        Counter value until reset to default_grid for probabilities of p,q points (Default = 0)
+    default_grid: np.array, optional
+        The default grid to use when the counter equals tol_cnt (Default = None, which is pred_grid)
+    tol_cnt: int, optional
+        The tolerance value when the prediction grid should reset to the default_grid (Default = 100).
+    verbose: boolean, optional
+        Print the total error for each iteration
+
+    Returns
+    ----------
+    fcs,dis_vdf,pred_grid,kernel,improved,ip,iq,n_p_prob,counter
+        All input parameters updated by this module
+    """
+
+    #set default grid if not set
+    if not isinstance(default_grid,np.ndarray):
+        default_grid = pred_grid.copy()
+    
+    #init pre_err variable
+    per_err = tot_err
+
+    #removed to test improving fit
+    for i in range(iters):
+        #error from previous iteration
+        pre_err = per_err
+        #get a new vdf and return if it is the best fit
+        #dis_vdf_bad,tot_error,dis_cur = create_random_vdf(dis_vdf_bad,nproc,n_p_prob)
+        #print(ip,iq,n_p_prob)
+        fcs,tot_err,dis_vdf,improved,ip,iq,n_p_prob = create_random_vdf_multi_fc(fcs,nproc,tot_err,
+                                                                                dis_vdf,pred_grid,
+                                                                                kernel,
+                                                                                improved=improved,ip=ip,
+                                                                                iq=iq,n_p_prob=n_p_prob,
+                                                                                sc_range=sc_range,samp=samp)
+        
+        if improved:
+            #scale probability by how large of a jump is made
+            if pre_err > 1e30:
+                scale = 0.1
+            else:
+                scale = (pre_err-tot_err)
+                if scale < 0.:
+                    scale = 0.
+            
+                #calculate peak at ip,iq value using the percent error change
+                a = 100.*(scale)/float(pred_grid.size)
+                
+                #Also add a band at a radius p,q values
+                r_ipq = np.sqrt(ip**2+iq**2)
+                #Add probability kernel at that location
+                pred_grid += a*np.exp(- ((np.sqrt((dis_vdf['pgrid']**2+dis_vdf['qgrid']**2))-(r_ipq))/kernel)**2.)
+                #normalize to 1
+                pred_grid /= np.sum(pred_grid)
+                
+                #Remove 10 guesses for counter for bad guesses
+                counter -= 10
+                #Do not let counter go below 0
+                if counter < 0:
+                    counter = 0
+        else:
+            #increment the bad guess for the current model pdf
+            counter += 1
+            #reset the grid back to the default if there are too many bad guess with current pdf
+            #do not probe velocity structures less than the measured spacing in the FC
+            if (counter > tol_cnt):
+                #reset the grid
+                pred_grid = default_grid.copy()
+                counter = 0
+                if kernel >= 15.:
+                   #decrease the kernel size by 10%
+                   kernel *= 0.9
+            
+        #updated per_err with new tot_err
+        per_err = tot_err
+    
+        if verbose:
+            print(counter) 
+            print('Total error for iteration {0:1d} is {1:4.3e}%'.format(i,100.*float(tot_err)))
+
+    return fcs,dis_vdf,pred_grid,kernel,improved,ip,iq,n_p_prob,counter
+    
+
+def gaus(x,a,x0,sigma):
+    """
+    Gaussian function 
+
+    Parameters
+    ------------
+    x: np.array or float
+        The independent value for a 1D Gaussian
+    a: float
+        The amplitude of Gaussian
+    x0: float
+        The center value of the Gaussian
+    sigma: float
+        The one sigma width of the Gaussian
+
+    Returns
+    -------
+    y:float or np.array
+        The dependent value for a given independent value (x). 
+    """
+    return a*np.exp(-(x-x0)**2/(2*sigma**2))
