@@ -664,7 +664,7 @@ def mc_reconstruct(fcs,nproc,dis_vdf,pred_grid,kernel,iters,
                   tot_err=1e31,improved=False,ip=0.,iq=0.,
                   n_p_prob=np.array([0.5,0.5]),sc_range=0.1,samp=15,
                   min_kernel=15.,verbose=False,counter=0,default_grid=None,
-                  tol_cnt=100):
+                  tol_cnt=100,return_convergence=False):
     """
     Monte Carlo 2D velocity distribution fuctions 
  
@@ -714,11 +714,15 @@ def mc_reconstruct(fcs,nproc,dis_vdf,pred_grid,kernel,iters,
         The tolerance value when the prediction grid should reset to the default_grid (Default = 100).
     verbose: boolean, optional
         Print the total error for each iteration
+    return_convergence: boolean, optional
+        Store the error per iteration number and return when finished (Default = False)
 
     Returns
     ----------
-    fcs,dis_vdf,pred_grid,kernel,improved,ip,iq,n_p_prob,counter
-        All input parameters updated by this module
+    fcs,dis_vdf,pred_grid,kernel,improved,ip,iq,n_p_prob,counter, (per_err_list)
+        All input parameters updated by this module. If return_convergence is True then return percent error
+        per iteration number (per_err_list) in addition to previous parameters
+   
     """
 
     #set default grid if not set
@@ -727,6 +731,11 @@ def mc_reconstruct(fcs,nproc,dis_vdf,pred_grid,kernel,iters,
     
     #init pre_err variable
     per_err = tot_err
+
+    #set up list of percent errors
+    if return_convergence:
+        per_err_list = []
+
 
     #removed to test improving fit
     for i in range(iters):
@@ -786,7 +795,14 @@ def mc_reconstruct(fcs,nproc,dis_vdf,pred_grid,kernel,iters,
             print(counter) 
             print('Total error for iteration {0:1d} is {1:4.3f}%'.format(i,100.*float(tot_err)))
 
-    return fcs,dis_vdf,pred_grid,kernel,improved,ip,iq,n_p_prob,counter
+        if return_convergence:
+            per_err_list.append(tot_err*100.)
+
+    #Add per_err_list to output if return_convergence is set
+    if return_convergence:
+        return fcs,dis_vdf,pred_grid,kernel,improved,ip,iq,n_p_prob,counter,per_err_list
+    else:
+        return fcs,dis_vdf,pred_grid,kernel,improved,ip,iq,n_p_prob,counter
     
 
 def gaus(x,a,x0,sigma):
