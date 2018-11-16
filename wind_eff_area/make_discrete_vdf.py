@@ -232,14 +232,15 @@ def make_discrete_vdf_random(dis_vdf,normval,improved=False,sc_range=0.1,p_sig=1
     #normalizing creates preference to cut down middle of velocity distribution 2018/08/23 J. Prchlik
     #Try weighting by the predicted VDF 2018/10/03 J. Prchlik
     #Grad point in the same area if previous gaussian improved fit
-    if improved:
-        #Added reduced Gaussian width 2018/10/24 J. Prchlik
-        p_grab = float(local_state.normal(loc=ip,scale=p_sig/2.,size=1))#,p=normval.ravel()))
-        q_grab = float(local_state.normal(loc=iq,scale=q_sig/2.,size=1))#,p=normval.ravel()))
-    #Do no guess in same area if adding a Gaussian did not improve the fit 2018/10/18 J. Prchlik
-    else:
-        p_grab = float(local_state.choice(pgrid.ravel(),size=1,p=normval.ravel()))
-        q_grab = float(local_state.choice(qgrid.ravel(),size=1,p=normval.ravel()))
+    #Stop guessing around a positive point instead updating a ring structure around a point 2018/11/16 J. Prchlik
+    ####if improved:
+    ####    #Added reduced Gaussian width 2018/10/24 J. Prchlik
+    ####    p_grab = float(local_state.normal(loc=ip,scale=p_sig/2.,size=1))#,p=normval.ravel()))
+    ####    q_grab = float(local_state.normal(loc=iq,scale=q_sig/2.,size=1))#,p=normval.ravel()))
+    #####Do no guess in same area if adding a Gaussian did not improve the fit 2018/10/18 J. Prchlik
+    ####else:
+    p_grab = float(local_state.choice(pgrid.ravel(),size=1,p=normval.ravel()))
+    q_grab = float(local_state.choice(qgrid.ravel(),size=1,p=normval.ravel()))
 
     
     #try either adding or subtracting
@@ -260,8 +261,12 @@ def make_discrete_vdf_random(dis_vdf,normval,improved=False,sc_range=0.1,p_sig=1
     #add varience to a_scale
     a_scale *= var
 
+    #Correct for the cylinderical coordinates in q system (refect a negative Gaussian into the postive axis) 2018/11/16 J, Prchlik
+    p_g = np.exp(- ((pgrid-p_grab)/p_sig)**2. - ((qgrid-q_grab)/q_sig)**2.)
+    n_g = np.exp(- ((pgrid-p_grab)/p_sig)**2. - ((qgrid-(-q_grab))/q_sig)**2.)
+
     #add variation guassian to rawvdf
-    ranvdf = a_scale*a*np.exp(- ((pgrid-p_grab)/p_sig)**2. - ((qgrid-q_grab)/q_sig)**2.)+rawvdf
+    ranvdf = a_scale*a*(p_g+n_g)+rawvdf
 
     #replace with original values if something is less than 0
     ranvdf[ranvdf < 0] = rawvdf[ranvdf < 0]
@@ -573,6 +578,14 @@ def plot_vdf(dis_vdf):
     #contour_levels = np.arange(0,2*n_levels+1,2)-4-n_levels*2
     plot_v = dis_vdf['vdf']/dis_vdf['vdf'].max()
 
+    #get values above counter levels
+    good_vals = np.where(plot_v > min(contour_levels))
+
+    #min, max Vperp
+    q_max = np.max(np.abs(dis_vdf['qgrid'][good_vals]))
+    #max Vpar
+    p_max = np.max(np.abs(dis_vdf['pgrid'][good_vals]))
+
     fig, ax = plt.subplots(figsize=(8,6))
 
     plotc = ax.pcolormesh(dis_vdf['pgrid'],dis_vdf['qgrid'],plot_v,vmin=min(contour_levels),vmax=1)
@@ -580,6 +593,13 @@ def plot_vdf(dis_vdf):
     cbar = fig.colorbar(plotc)
     cbar.set_label('Normalized [Fraction of Max.]',fontsize=18)
 
+    #square everything up
+    p_max = np.sqrt(q_max**2+p_max**2)
+    q_max = p_max
+    ax.set_xlim([-p_max,p_max])
+    ax.set_ylim([0,q_max])
+
+    #Add labels to plots
     ax.set_xlabel(r'V$_\parallel$ [km/s]',fontsize=22)
     ax.set_ylabel(r'V$_\perp$ [km/s]',fontsize=22)
 
