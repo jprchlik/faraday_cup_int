@@ -567,15 +567,18 @@ def plot_vdf(dis_vdf):
     import matplotlib.pyplot as plt
 
     #Added static Contour levels 2018/10/12 J. Prchlik
-    n_levels = 10
-    contour_levels = np.arange(0,2*n_levels+1,2)-4-n_levels*2
+    n_levels = 5
+    #update contour levels to be n$\sigma$ from peak 2018/11/16 J. Prchlik
+    contour_levels = np.exp(-np.arange(n_levels,0,-1))
+    #contour_levels = np.arange(0,2*n_levels+1,2)-4-n_levels*2
+    plot_v = dis_vdf['vdf']/dis_vdf['vdf'].max()
 
     fig, ax = plt.subplots(figsize=(8,6))
 
-    plotc = ax.pcolormesh(dis_vdf['pgrid'],dis_vdf['qgrid'],np.log10(dis_vdf['vdf']),vmin=-19,vmax=-5)
-    ax.contour(dis_vdf['pgrid'],dis_vdf['qgrid'],np.log10(dis_vdf['vdf']), contour_levels,colors='black',linestyles='dashed',linewidths=3 )
+    plotc = ax.pcolormesh(dis_vdf['pgrid'],dis_vdf['qgrid'],plot_v,vmin=min(contour_levels),vmax=1)
+    ax.contour(dis_vdf['pgrid'],dis_vdf['qgrid'],plot_v, contour_levels,colors='black',linestyles='dashed',linewidths=3 )
     cbar = fig.colorbar(plotc)
-    cbar.set_label('Normalized Dist. [s$^{3}$cm$^{-3}$km$^{-3}$]',fontsize=18)
+    cbar.set_label('Normalized [Fraction of Max.]',fontsize=18)
 
     ax.set_xlabel(r'V$_\parallel$ [km/s]',fontsize=22)
     ax.set_ylabel(r'V$_\perp$ [km/s]',fontsize=22)
