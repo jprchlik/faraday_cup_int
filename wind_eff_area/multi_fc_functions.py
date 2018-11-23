@@ -175,6 +175,7 @@ def get_variation_grid(fcs,dis_vdf,p_num=10,q_num=10,a_scale=0.1,nproc=10):
 
 def create_random_vdf_multi_fc(fcs,nproc,cur_err,dis_vdf_guess,pred_grid,kernel,improved=False,samp=3.,verbose=False,ip=0.,iq=0.,n_p_prob=[0.5,0.5],sc_range=0.1):
     """
+ 
     Parameters
     -----------
     fcs: dictionary
@@ -666,7 +667,13 @@ def mc_reconstruct(fcs,nproc,dis_vdf,pred_grid,kernel,iters,
                   min_kernel=15.,verbose=False,counter=0,default_grid=None,
                   tol_cnt=100,return_convergence=False):
     """
-    Monte Carlo 2D velocity distribution fuctions 
+	mc_reconstruct attempts to reconstruct a 2D velocity distribution function (VDF) from multiple 1D Faraday Cup (FC) measurements. The program 
+	does this by iteratively adding a Gaussian kernel to a initial reconstruction of the 2D VDF. For each iteration, the program checks whether the added
+	Gaussian kernel reduces the squared residuals of the integrated "pseudo" 2D VDF compared to the 1D FC observations. If True, then the program accepts
+	the newly added Gaussian kernel to the 2D reconstruction, stores whether the kernel location, and whether the kernel was postive or negative. It uses
+    the kernel location to updated the probability array to allow more guesses in a radius equal to the parallel (p), perpendicular (q) value. It uses
+    the kernel sign to decide whether the next guess should be positive or negative. If the function cannot find a improving kernel after tol_cnt iterations,
+    it skrinks the kernel size by 10% and resets the probability array to the input value. The kernel size plateus at a min value of min_kernel. 
  
     Parameters
     ----------
@@ -735,6 +742,8 @@ def mc_reconstruct(fcs,nproc,dis_vdf,pred_grid,kernel,iters,
     #set up list of percent errors
     if return_convergence:
         per_err_list = []
+        #list of kernel sizes for each guess
+        ker_sze_list = []
 
 
     #removed to test improving fit
@@ -784,7 +793,7 @@ def mc_reconstruct(fcs,nproc,dis_vdf,pred_grid,kernel,iters,
                 #reset the grid
                 pred_grid = default_grid.copy()
                 counter = 0
-                if kernel >= 15.:
+                if kernel >= min_kernel: 
                    #decrease the kernel size by 10%
                    kernel *= 0.9
             
@@ -797,10 +806,11 @@ def mc_reconstruct(fcs,nproc,dis_vdf,pred_grid,kernel,iters,
 
         if return_convergence:
             per_err_list.append(tot_err*100.)
+            ker_sze_list.append(kernel)
 
     #Add per_err_list to output if return_convergence is set
     if return_convergence:
-        return fcs,dis_vdf,pred_grid,kernel,improved,ip,iq,n_p_prob,counter,per_err_list
+        return fcs,dis_vdf,pred_grid,kernel,improved,ip,iq,n_p_prob,counter,per_err_list,ker_sze_list
     else:
         return fcs,dis_vdf,pred_grid,kernel,improved,ip,iq,n_p_prob,counter
     
