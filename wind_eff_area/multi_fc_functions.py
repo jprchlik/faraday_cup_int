@@ -2,7 +2,7 @@ import make_discrete_vdf as mdv
 from scipy.interpolate import RectBivariateSpline
 import numpy as np
 from multiprocessing import Pool
-from scipy.optimize import curve_fit
+from scipy.optimize import curve_fit, minimize
 import matplotlib.pyplot as plt
 from fancy_plot import fancy_plot
 
@@ -836,3 +836,114 @@ def gaus(x,a,x0,sigma):
         The dependent value for a given independent value (x). 
     """
     return a*np.exp(-(x-x0)**2/(2*sigma**2))
+
+
+def parameter_reconstruct(z,fcs,cur_vdf):
+    """
+    Parameters
+    ------------
+    z: list
+        A list of input parameters used in the 2D velocity reconstruction. 
+        The list must contain the following variables in the following order:
+        vx,vy,vz,wper,wpar,den where vx is the x-component of the velocity in
+        GSE coordinates, vy in the y-component of the velocity in GSE coordinates
+        vz is the z-component of the velocity in GSE coordinates,
+        wper is the thermal speed in the perpendicular direction,
+        wpar is the thermal speed in the parallel direction, and
+        den is the number density of protons.
+    fcs: dictionary
+        A dictionary of Faraday cups created by mff.create_multi_fc()
+    cur_vdf: dictionary
+        Dictionary of the velocity distribution created by make_discrete_vdf()
+
+    Returns
+    -------
+    powell: scipy.optimize minimum object
+    """
+        
+    powell = minimize(gauss_2d_reconstruct,p_guess, args=(fcs,dis_vdf_bad),method='Powell',options={'maxiter':10,'maxfev': 10})
+
+    return powell
+
+
+
+def gauss_2d_reconstruct(z,fcs,cur_vdf):
+    """
+    Function that reconstructs the 2D velocity distribution in the V parallel
+    and V perp reference frame by assuming a 2D Gaussian.
+    
+    Parameters
+    ------------
+    z: list
+        A list of input parameters used in the 2D velocity reconstruction. 
+        The list must contain the following variables in the following order:
+        vx,vy,vz,wper,wpar,den where vx is the x-component of the velocity in
+        GSE coordinates, vy in the y-component of the velocity in GSE coordinates
+        vz is the z-component of the velocity in GSE coordinates,
+        wper is the thermal speed in the perpendicular direction,
+        wpar is the thermal speed in the parallel direction, and
+        den is the number density of protons.
+    fcs: dictionary
+        A dictionary of Faraday cups created by mff.create_multi_fc()
+    cur_vdf: dictionary
+        Dictionary of the velocity distribution created by make_discrete_vdf()
+        
+    Returns
+    -------
+    y:float or np.array
+        The measured current of all Faraday Cups
+    """
+    vx = cur_vdf['u_gse'][0]
+    vy = cur_vdf['u_gse'][1]
+    vz = cur_vdf['u_gse'][2]
+    
+    vx,vy,vz,wper, wpar, den = z
+    
+    #                   Vx,Vy,Vz,Wper,Wpar, Np
+    pls_par = np.array([vx,vy,vz,wper, wpar, den]) 
+    
+  #Get static variables from cur_vdf to add to creation of new guess VDF
+    vel_clip = cur_vdf['pgrid'].max()
+    pres     = np.mean(np.diff(cur_vdf['pgrid'][:,0]))
+    qres     = np.mean(np.diff(cur_vdf['qgrid'][0,:]))
+    
+    #Create new VDF guess based on input parameters
+    dis_vdf = mdv.make_discrete_vdf(pls_par,cur_vdf['b_gse'],pres=pres,qres=qres,clip=vel_clip) 
+    
+    looper = []
+    #loop over all fc in fcs to populate with new VDF guess
+    for i,key in enumerate(fcs.keys()):
+        #add variation and store which faraday cup you are working with using key
+        #Updated with varying integration sampling function 2018/10/12 J. Prchlik
+        inpt_x = fcs[key]['x_meas'].copy()
+        g_vdf  = dis_vdf.copy()
+        peak   =  fcs[key]['peak'].copy()
+        looper.append((inpt_x,g_vdf,samp,key))
+        
+    #process in parallel
+    nproc = 8
+    pool = Pool(processes=nproc)
+    dis_cur = pool.map(proc_wrap,looper)
+    pool.close()
+    pool.join()       
+    
+    
+    #break into index value in looper and the 1D current distribution
+    index   = np.array(zip(*dis_cur)[1])
+    dis_cur = np.array(zip(*dis_cur)[0])
+
+
+    #get sum squared best fit
+    tot_err = np.zeros(dis_cur.shape[0])
+    tot_int = np.zeros(dis_cur.shape[0])
+    #Get error in each faraday cup
+    for j,i in enumerate(index):
+        tot_err[j] = np.sum((dis_cur[j,:] - fcs[i]['rea_cur'])**2)
+        tot_int[j] = np.sum((fcs[i]['rea_cur'])**2)
+
+    #total error for all fc
+    #Remove values with no flux from guess fitting
+    tot_err[tot_int < 1e-25] = 0
+    fcs_err = np.sum(tot_err**2) /np.sum(tot_int**2)
+
+    return fcs_err
