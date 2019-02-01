@@ -85,7 +85,7 @@ def compute_gse_from_fit(phi,theta,fit):
    
     return best_vgse
 
-def make_discrete_vdf(pls_par,mag_par,pres=0.5,qres=0.5,clip=300.):
+def make_discrete_vdf(pls_par,mag_par,pres=0.5,qres=0.5,clip=300.,add_ring=[]):
     """
     Returns Discrete Velocity distribution function given a set of input parameters.
 
@@ -110,6 +110,14 @@ def make_discrete_vdf(pls_par,mag_par,pres=0.5,qres=0.5,clip=300.):
 
     clip: float, optional
         The measurement width in vper and vpar (Default = 300.). 
+
+    add_ring: np.array or list, optional
+        The list must contain the following variables in the following order:
+        q_r,p_r,wper_r,wpar_r,peak_r (Default = []). The variables q_r and p_r
+        are the locations of a ring respectively in Vperp and Vpar, wper_r and wpar_r
+        are the perpendicular and parallel thermal velocity widths, peak_r is the 
+        maximum value of the added ring. The variable must be 5 elements long 
+        or the code will not add a ring distribution.
 
     Returns:
     ---------
@@ -150,12 +158,41 @@ def make_discrete_vdf(pls_par,mag_par,pres=0.5,qres=0.5,clip=300.):
     #compute the raw vdf (ftos comes from transformation from FWHM to 2Sigma)
     rawvdf = a*np.exp(- (pgrid/wpar)**2. - (qgrid/wper)**2.)
 
+    #Add ring to fit
+    if len(add_ring) == 5:
+        #parameters specificed in add_ring
+        q_r,p_r,wper_r,wpar_r,peak_r = add_ring
+        #Add a positive Gaussian Kernal to "Measured" VDF
+        rawvdf += peak_r*np.exp(- ((pgrid-(p_r))/wpar_r)**2. - ((qgrid-(q_r))/wper_r)**2.)
+
     #create an interpolating function for the vdf
     f = RectBivariateSpline(p,q,rawvdf)
     
     #create dictionary
     dis_vdf = {'vdf':rawvdf,'pgrid':pgrid,'qgrid':qgrid,'u_gse':u_gse,'b_gse':mag_par,'vdf_func':f}
     return dis_vdf
+
+
+def ring_vdf(dis_vdf,vx,vy,vz,wper,wpar,den,q_r,p_r,wper_r,wpar_r,peak_r):
+        #                   Vx,Vy,Vz,Wper,Wpar, Np
+    pls_par = np.array([vx,vy,vz,wper, wpar, den]) 
+    
+    #Get static variables from cur_vdf to add to creation of new guess VDF
+    vel_clip = cur_vdf['pgrid'].max()
+    pres     = np.mean(np.diff(cur_vdf['pgrid'][:,0]))
+    qres     = np.mean(np.diff(cur_vdf['qgrid'][0,:]))
+    
+    #Create new VDF guess based on input parameters
+    dis_vdf = mdv.make_discrete_vdf(pls_par,cur_vdf['b_gse'],pres=pres,qres=qres,clip=vel_clip) 
+    
+    #Add ring to fit
+    #Add a positive Gaussian Kernal to "Measured" VDF
+    dis_vdf['vdf'] += peak_r*np.exp(- ((dis_vdf['pgrid']-(p_r))/wpar_r)**2. - ((dis_vdf['qgrid']-(q_r))/wper_r)**2.)
+    #update the interpolator function
+    dis_vdf['vdf_func'] =  RectBivariateSpline(dis_vdf['pgrid'][:,0],dis_vdf['qgrid'][0,:],dis_vdf['vdf'])
+    
+    return dis_vdf
+
 
 def make_discrete_vdf_random(dis_vdf,normval,improved=False,sc_range=0.1,p_sig=10.,q_sig=10.,n_p_prob=[0.5,0.5],ip=0.,iq=0.):
     """
