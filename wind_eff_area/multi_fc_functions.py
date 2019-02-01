@@ -579,10 +579,11 @@ def create_multi_fc(dis_vdf,ncup,phi_lim=90.,tht_lim=30.,random_seed=None,v_rng=
     for k,(phi,theta) in enumerate(zip(phis,thetas)):
 
         #rotate velocity into FC coordinates
+        #Just use velocity peak
         pls_fc = mdv.convert_gse_fc(pls_par,phi,theta)
 
-        #Assume a 45 FoV cut off
-        pls_fc[:2] *= np.cos(np.radians(45.))
+        ####Assume a 45 FoV cut off
+        pls_fc[:3] *= np.cos(np.radians(45.))
 
         #########################################
         #Set up observering condidtions before making any VDFs
@@ -590,14 +591,14 @@ def create_multi_fc(dis_vdf,ncup,phi_lim=90.,tht_lim=30.,random_seed=None,v_rng=
         #########################################
         ######################################
         #get velocity normal to the FC
-        v_mag = np.sqrt(np.sum(pls_fc**2))
+        v_mag = np.sqrt(np.sum(pls_fc[:3]**2))
         grid_v = np.arange(v_mag-v_rng,v_mag+v_rng,v_smp)
         #switch to linear sampling to make sure all are the same size
         grid_v = np.linspace(v_mag-v_rng,v_mag+v_rng,v_smp)
 
-        #do not let grid go below 380 km/s
-        if grid_v.min() < 380.:
-            grid_v += 380-grid_v.min()
+        #do not let grid go below 180 km/s
+        if grid_v.min() < 180.:
+            grid_v += 180-grid_v.min()
         if grid_v.max() > 1300.:
             grid_v -= 1300-grid_v.max()
         #get effective area of wind and other coversion parameters
