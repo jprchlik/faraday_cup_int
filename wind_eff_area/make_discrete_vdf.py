@@ -5,6 +5,7 @@ import scipy.interpolate as interp
 from scipy.interpolate import RectBivariateSpline
 from scipy.special import erf
 import monte_carlo_int as mci
+from scipy.stats import gennorm
 import sympy
 import time
 
@@ -172,6 +173,105 @@ def make_discrete_vdf(pls_par,mag_par,pres=0.5,qres=0.5,clip=300.,add_ring=[]):
     dis_vdf = {'vdf':rawvdf,'pgrid':pgrid,'qgrid':qgrid,'u_gse':u_gse,'b_gse':mag_par,'vdf_func':f}
     return dis_vdf
 
+def make_discrete_gennorm_vdf(pls_par,mag_par,pres=0.5,qres=0.5,clip=300.,add_ring=[]):
+    """
+    Returns Discrete Velocity distribution function given a set of input parameters.
+
+    Parameters:
+    -----------
+    pls_par: np.array
+        A numpy array of plasma parameters in the following order: Vx,Vy,Vz,Wper,Wpar,Np,sper, and spar.
+        That is the proton velocity in the solar wind in X GSE, Y GSE, and Z GSE in km/s,
+        followed by the thermal width perpendicular and parallel to the magnetic field normal,
+        and finally the proton number density in cm^{-3}. Respectively, sper and spar correspond to
+        the s parameter of a generalized noramal distribution (Nadarajah 2005), where s=2 is a Gaussian.
+        Wper and Wpar are assumed to be sigma values not Full Width at half maximum.
+    
+    mag_par: np.array
+        A numpy array of the magnetic field normal in the following order : bx, by, and bz.
+        The normal vectors should be defined in GSE coordinates.
+
+    pres: float, optional
+        The resolution of the instrument in the parallel direction in km/s (Default = 0.5).
+
+    qres: float, optional
+        The resolution of the instrument in the perpendicular direction in km/s (Default = 0.5).
+
+    clip: float, optional
+        The measurement width in vper and vpar (Default = 300.). 
+
+    add_ring: np.array or list, optional
+        The list must contain the following variables in the following order:
+        q_r,p_r,wper_r,wpar_r,peak_r,sper_r,spar_r (Default = []). The variables q_r and p_r
+        are the locations of a ring respectively in Vperp and Vpar, wper_r and wpar_r
+        are the perpendicular and parallel thermal velocity widths, peak_r is the 
+        maximum value of the added ring, sper_r and spar_r are the s parameter of a generalized
+        normal distribution. The variable must be 7 elements long or the code will not add a ring distribution.
+
+    Returns:
+    ---------
+    dis_vdf: dictionary
+        Dictionary containing a discrete VDF function ['vdf'], the propogating direction grid ['pgrid'],
+        the perpendicular to the propogating direction grid ['qgrid'], velocity vector in gse ['u_gse'],
+        the normal magnetic field vector ['b_gse'] and a BiVariateSpline interpolation function ['vdf_func'].   
+    """
+
+    #Set up names for easy call
+    u_gse = pls_par[:3]
+    wper  = pls_par[3]
+    wpar  = pls_par[4]
+    n     = pls_par[5]
+    sper  = pls_par[6]
+    spar  = pls_par[7]
+
+
+
+    #convert FWHM to sigma
+    ftos = 1./(2.*np.sqrt(2.*np.log(2.)))
+    
+    #distribution of velocities in the parallel direction
+    #p = np.arange(-wpar*clip,(wpar*clip)+pres,pres)
+    #updated to fixed range 2018/10/12 J. Prchlik
+    p = np.arange(-clip,clip+pres,pres)
+    #distribution of velocities in the perpendicular direction
+    #q = np.arange(0,(wper*clip)+qres,qres)
+    #updated to fixed range 2018/10/12 J. Prchlik
+    q = np.arange(0,clip+qres,qres)
+    
+    
+    #created 2D grid of velocities in the X and y direction
+    pgrid, qgrid = np.meshgrid(p,q)
+    pgrid, qgrid = pgrid.T,qgrid.T
+    
+    #Get VDF constance
+    #Added addition 2^{3/2)  based on definition 2018/10/05 J. Prchlik
+    #Can no longer use traditional density in gennorm distribution 2019/02/08
+    a = n#/(np.sqrt((np.pi)**3.)*(wpar*wper**2.)) # 1/cm^3 * s^3 /km^3 
+    
+    #compute the raw vdf (ftos comes from transformation from FWHM to 2Sigma)
+    #rawvdf = a*np.exp(- (pgrid/wpar)**2. - (qgrid/wper)**2.)
+    #Factor of 2 comes from defintion of pgrid which is only positive and p=0 is the origin
+    rawvdf = a*2.*gennorm.pdf(pgrid,spar,scale=np.sqrt(2.)*wpar)*gennorm.pdf(qgrid,sper,scale=np.sqrt(2.)*wper)
+
+    #Add ring to fit
+    if len(add_ring) == 7:
+        #parameters specificed in add_ring
+        q_r,p_r,wper_r,wpar_r,peak_r,sper_r,spar_r = add_ring
+        #Add a positive Gaussian Kernal to "Measured" VDF
+        #rawvdf += peak_r*np.exp(- ((pgrid-(p_r))/wpar_r)**2. - ((qgrid-(q_r))/wper_r)**2.)
+        #Positive and negative pgrid comes from the p(arellel) value being a magnitude quantity 2019/02/08 J. Prchlik
+        rawvdf += (peak_r*
+                  (gennorm.pdf( pgrid,spar_r,scale=1./(np.sqrt(2.)*wpar_r),loc=p_r)
+                  +gennorm.pdf(-pgrid,spar_r,scale=1./(np.sqrt(2.)*wpar_r),loc=p_r))
+                  *gennorm.pdf( qgrid,sper_r,scale=1./(np.sqrt(2.)*wper_r),loc=q_r))
+
+    #create an interpolating function for the vdf
+    f = RectBivariateSpline(p,q,rawvdf)
+    
+    #create dictionary
+    dis_vdf = {'vdf':rawvdf,'pgrid':pgrid,'qgrid':qgrid,'u_gse':u_gse,'b_gse':mag_par,'vdf_func':f}
+
+    return dis_vdf
 
 def ring_vdf(dis_vdf,vx,vy,vz,wper,wpar,den,q_r,p_r,wper_r,wpar_r,peak_r):
         #                   Vx,Vy,Vz,Wper,Wpar, Np
