@@ -5,6 +5,7 @@ from multiprocessing import Pool
 from scipy.optimize import curve_fit, minimize
 import matplotlib.pyplot as plt
 from fancy_plot import fancy_plot
+from scipy.stats import gennorm
 
 
 def proc_wrap(arg):
@@ -551,8 +552,8 @@ def create_multi_fc(dis_vdf,ncup,phi_lim=90.,tht_lim=30.,random_seed=None,v_rng=
     big_arr = np.array
         An array ncup by 8 np.array of Gaussian measurment of the solar wind parameters according 
         a given FC orientation. The first column is the speed, 2nd the Gaussian width, 3rd the
-        number density, 4th FC phi angle in radians, 5th FC theta angle in radians, 6th the
-        speed uncertainty, 7th the width uncertainty, and 8th the number density uncertainty.
+        peak of the distribution, 4th FC phi angle in radians, 5th FC theta angle in radians, 6th the
+        speed uncertainty, 7th the width uncertainty, and 8th the peak uncertainty.
     """
 
 
@@ -644,12 +645,14 @@ def create_multi_fc(dis_vdf,ncup,phi_lim=90.,tht_lim=30.,random_seed=None,v_rng=
         #####get the parameters from the fit
         u = popt[1] #speed in km/s
         w = np.abs(popt[2]*np.sqrt(2.)) #thermal speed in km/s
-        n = popt[0]*w*np.sqrt(np.pi) #density in cc
+        #Switch to just the peak for gennorm distributions 2019/02/08 J. Prchlik
+        n = popt[0]#*w*np.sqrt(np.pi) #density in cc
         ####
         #####uncertainty in parameters from fit
         du = np.sqrt(pcov[1,1])
         dw = np.sqrt(pcov[2,2])
-        dn = np.sqrt(np.pi*((w**2.*pcov[0,0]) + (dw*n)**2))
+        #Switch to just the peak for gennorm distributions 2019/02/08 J. Prchlik
+        dn = np.sqrt(pcov[0,0])
     
     
         #Add fit parameters with velocity guesses
@@ -950,7 +953,7 @@ def gauss_2d_reconstruct(z,fcs,cur_vdf):
     return fcs_err
 
 
-def gauss_2d_reconstruct(z,fcs,cur_vdf,add_ring=False,nproc=8):
+def gauss_2d_reconstruct(z,fcs,cur_vdf,add_ring=False,nproc=8,samp=15.):
     """
     Function that reconstructs the 2D velocity distribution in the V parallel
     and V perp reference frame by assuming a 2D Gaussian.
@@ -975,6 +978,8 @@ def gauss_2d_reconstruct(z,fcs,cur_vdf,add_ring=False,nproc=8):
     nproc: int, optional
         Number of processors to use when computing theoretical 1D FC measurements
         from the theoretical 2D velocity distribution in Vpar and Vper (Default = 8).
+    samp: float, optional
+        Sampling of integration in km/s (Default = 15)
         
     Returns
     -------
@@ -1068,5 +1073,106 @@ def ring_vdf(cur_vdf,vx,vy,vz,wper,wpar,den,q_r,p_r,wper_r,wpar_r,peak_r):
     
     return dis_vdf
 
+
+
+def gennorm_2d_reconstruct(z,fcs,cur_vdf,add_ring=False,nproc=8,samp=15.):
+    """
+    Function that reconstructs the 2D velocity distribution in the V parallel
+    and V perp reference frame by assuming a 2D Gaussian.
+    
+    Parameters
+    ------------
+    z: list
+        A list of input parameters used in the 2D velocity reconstruction. 
+        The list must contain the following variables in the following order:
+        vx,vy,vz,wper,wpar,den,q_r,p_r,wper_r,wpar_r,peak_r where vx is the x-component of the velocity in
+        GSE coordinates, vy in the y-component of the velocity in GSE coordinates
+        vz is the z-component of the velocity in GSE coordinates, q_r and p_r are
+        the locations of a ring respectively in Vperp and Vpar, wper_r and wpar_r
+        are the perpendicular and parallel thermal velocity widths, peak_r is the 
+        maximum value of the added ring.
+    fcs: dictionary
+        A dictionary of Faraday cups created by mff.create_multi_fc()
+    cur_vdf: dictionary
+        Dictionary of the velocity distribution created by make_discrete_vdf()
+    add_ring: boolean, optional
+        Add ring to model velocity distribution (Default = False).
+    nproc: int, optional
+        Number of processors to use when computing theoretical 1D FC measurements
+        from the theoretical 2D velocity distribution in Vpar and Vper (Default = 8).
+    samp: float, optional
+        Sampling of integration in km/s (Default = 15)
+        
+    Returns
+    -------
+    y:float or np.array
+        The measured current of all Faraday Cups
+    """
+
+    #parameters to adjust in model if there is a ring and a core
+    if add_ring:
+        vx,vy,vz,wper, wpar, den,sper,spar,q_r,p_r,wper_r,wpar_r,peak_r,sper_r,spar_r = z
+    #parameters to adjust in model if there is just a core
+    else:
+        vx,vy,vz,wper, wpar, den,sper,spar = z
+    
+    #                   Vx,Vy,Vz,Wper,Wpar , Np , scale for a generalized normal distribution in perpendicual and parallel direction
+    pls_par = np.array([vx,vy,vz,wper, wpar, den, sper,spar]) 
+    
+    #Get static variables from cur_vdf to add to creation of new guess VDF
+    vel_clip = cur_vdf['pgrid'].max()
+    pres     = np.mean(np.diff(cur_vdf['pgrid'][:,0]))
+    qres     = np.mean(np.diff(cur_vdf['qgrid'][0,:]))
+    
+    
+    #Add ring to fit
+    if add_ring:
+        #Switched to generalized normal distribution 2019/02/07 J. Prchlik see https://docs.scipy.org/doc/scipy-0.16.1/reference/generated/scipy.stats.gennorm.html
+        dis_vdf = mdv.make_discrete_gennorm_vdf(pls_par,cur_vdf['b_gse'],pres=pres,qres=qres,clip=vel_clip,add_ring=[q_r,p_r,wper_r,wpar_r,peak_r,sper_r,spar_r]) 
+    else:
+        #Create new VDF guess based on input parameters
+        #Switched to generalized normal distribution 2019/02/07 J. Prchlik see https://docs.scipy.org/doc/scipy-0.16.1/reference/generated/scipy.stats.gennorm.html
+        dis_vdf = mdv.make_discrete_gennorm_vdf(pls_par,cur_vdf['b_gse'],pres=pres,qres=qres,clip=vel_clip) 
+      
+    
+    looper = []
+    #loop over all fc in fcs to populate with new VDF guess
+    for i,key in enumerate(fcs.keys()):
+        #add variation and store which faraday cup you are working with using key
+        #Updated with varying integration sampling function 2018/10/12 J. Prchlik
+        inpt_x = fcs[key]['x_meas'].copy()
+        g_vdf  = dis_vdf.copy()
+        peak   =  fcs[key]['peak'].copy()
+        looper.append((inpt_x,g_vdf,samp,key))
+        
+    #process in parallel
+    pool = Pool(processes=nproc)
+    dis_cur = pool.map(proc_wrap,looper)
+    pool.close()
+    pool.join()       
+    
+    
+    #break into index value in looper and the 1D current distribution
+    index   = np.array(zip(*dis_cur)[1])
+    dis_cur = np.array(zip(*dis_cur)[0])
+
+
+    #get sum squared best fit
+    tot_err = np.zeros(dis_cur.shape[0])
+    tot_int = np.zeros(dis_cur.shape[0])
+    #Get error in each faraday cup
+    for j,i in enumerate(index):
+        tot_err[j] = np.sum((dis_cur[j,:] - fcs[i]['rea_cur'])**2)
+        tot_int[j] = np.sum((fcs[i]['rea_cur'])**2)
+
+    #print(tot_err)
+    #total error for all fc
+    #tot_err[tot_int < 1e-25] = 0
+    #fcs_err = np.median(tot_err)
+    fcs_err = np.sqrt(np.sum(tot_err**2) /np.sum(tot_int**2))
+    #Remove really bad values from guess fitting
+
+        
+    return fcs_err
 
 
