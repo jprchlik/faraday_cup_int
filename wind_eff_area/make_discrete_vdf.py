@@ -242,9 +242,6 @@ def make_discrete_gennorm_vdf(pls_par,mag_par,pres=0.5,qres=0.5,clip=300.,add_ri
     #created 2D grid of velocities in the X and y direction
     pgrid, qgrid = np.meshgrid(p,q)
     pgrid, qgrid = pgrid.T,qgrid.T
-    print(pgrid.min(),qgrid.min())
-    print(wpar,wper)
-    print(spar,sper)
     
     #Get VDF constance
     #Added addition 2^{3/2)  based on definition 2018/10/05 J. Prchlik
