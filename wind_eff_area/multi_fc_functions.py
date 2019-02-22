@@ -487,15 +487,18 @@ def create_fc_grid_plot(fcs,waeff=3.8e6,q0=1.6021892e-7):
         dv    =  fcs[key]['x_meas'][1,:]
         cont  = 1.e12/(waeff*q0*dv*grid_v)
 
+        #sort by the velocity values when plotting
+        sort = np.argsort(grid_v)
+
         #removed to test improving Gaussian fit
         #add checks to plot only variables that are defined
         if 'dis_cur' in fcs[key]:
-            ax.plot(grid_v,fcs[key]['dis_cur'].ravel()*cont,label='Best MC',color='black',linewidth=3)
+            ax.plot(grid_v[sort],fcs[key]['dis_cur'].ravel()[sort]*cont,label='Best MC',color='black',linewidth=3)
         if 'rea_cur' in fcs[key]:
-            ax.plot(grid_v,fcs[key]['rea_cur'].ravel()*cont,'-.b',label='Input',linewidth=3)
+            ax.plot(grid_v[sort],fcs[key]['rea_cur'].ravel()[sort]*cont,'-.b',label='Input',linewidth=3)
         #ax.plot(grid_v,rea_cur.ravel()*cont,'-.b',label='Input',linewidth=3)
         if 'init_guess' in fcs[key]:
-            ax.plot(grid_v,fcs[key]['init_guess'].ravel()*cont,':',color='purple',label='Init. Guess',linewidth=3)
+            ax.plot(grid_v[sort],fcs[key]['init_guess'].ravel()[sort]*cont,':',color='purple',label='Init. Guess',linewidth=3)
         ax.text(0.05,0.8,'$\Phi$={0:2.1f}$^\circ$\n$\Theta$={1:2.1f}$^\circ$'.format(*np.degrees(fcs[key]['x_meas'][[2,3],0])),transform=ax.transAxes)
         #ax.plot(grid_v, gaus(grid_v,*popt),'--',marker='o',label='Gauss Fit',linewidth=3)
         fancy_plot(ax)
