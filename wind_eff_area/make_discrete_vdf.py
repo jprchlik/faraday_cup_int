@@ -154,10 +154,10 @@ def make_discrete_vdf(pls_par,mag_par,pres=0.5,qres=0.5,clip=300.,add_ring=[]):
     
     #Get VDF constance
     #Added addition 2^{3/2)  based on definition 2018/10/05 J. Prchlik
-    a = n/(np.sqrt((np.pi)**3.)*(wpar*wper**2.)) # 1/cm^3 * s^3 /km^3 
+    a = n/(np.sqrt((2.*np.pi)**3.)*(wpar*wper**2.)) # 1/cm^3 * s^3 /km^3 
     
     #compute the raw vdf (ftos comes from transformation from FWHM to 2Sigma)
-    rawvdf = a*np.exp(- (pgrid/wpar)**2. - (qgrid/wper)**2.)
+    rawvdf = a*np.exp(- (pgrid/(2.*wpar))**2. - (qgrid/(2.*wper))**2.)
 
     #Add ring to fit
     if len(add_ring) == 5:
