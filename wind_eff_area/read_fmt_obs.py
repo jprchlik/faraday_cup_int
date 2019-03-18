@@ -181,10 +181,12 @@ def fmt_wind_spec(date,spec_dir='test_obs/test_wind_spectra/',parm_dir=None,
             k = len(fcs.keys())
 
             #rotate velocity into FC coordinates
-            pls_fc = mdv.convert_gse_fc(pls_par,phi,theta)
+            pls_fc = mdv.convert_gse_fc(pls_par,np.radians(phi),np.radians(theta))
 
             #find angle between FC and bulk flow
-            fc_bf = np.abs(np.degrees(np.arccos(np.dot([0.,0.,-1.],pls_fc/v_mag))))
+            #fc_bf = np.abs(np.degrees(np.arccos(np.dot([0.,0.,-1.],pls_fc/v_mag))))
+            #get angle onto the cup
+            fc_bf = np.degrees(np.arctan2(np.sqrt(pls_fc[1]**2 + pls_fc[0]**2),-pls_fc[2]))
         
             #########################################
             #Set up observering condidtions before making any VDFs
@@ -193,7 +195,13 @@ def fmt_wind_spec(date,spec_dir='test_obs/test_wind_spectra/',parm_dir=None,
             ######################################
             #get effective area of wind and other coversion parameters
             #get effective area by interpolating the angle between solar wind and bulk flow
-            waeff = cup_intp(fc_bf) #cm^3/km
+            #waeff = cup_intp(fc_bf) #cm^3/km
+            waeff = cup_intp(fc_bf)*1e6 #cm^3/km
+
+            #only include reasonable effective area values in calculations
+            if fc_bf >= 59:
+                waeff = np.inf
+            
             q0    = 1.6021892e-7 # picocoulombs
             #velocity grid is static for each epoch
             grid_v= cup_vkms[spec_ind]
@@ -240,9 +248,9 @@ def fmt_wind_spec(date,spec_dir='test_obs/test_wind_spectra/',parm_dir=None,
             fcs[key]['x_meas']  = x_meas
             fcs[key]['rea_cur'] = rea_cur
             fcs[key]['peak']    = v_mag
-            fcs[key]['cont']    = cont
+            fcs[key]['cont']    = cont.ravel() #Make 1D array
             #Add initial guess based on measured Wind parameters
-            fcs[key]['init_guess'] = mdv.arb_p_response(fcs[key]['x_meas'],vdf_inpt,samp)
+            fcs[key]['init_guess'] = mdv.arb_p_response(fcs[key]['x_meas'],vdf_inpt,samp,sc='wind')
 
 
     return fcs,vdf_inpt
