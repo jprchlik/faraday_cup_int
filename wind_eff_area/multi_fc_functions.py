@@ -485,7 +485,9 @@ def create_fc_grid_plot(fcs,waeff=3.8e6,q0=1.6021892e-7):
         #first column of x_measure is the velocity grid
         grid_v = fcs[key]['x_meas'][0,:]
         dv    =  fcs[key]['x_meas'][1,:]
-        cont  = 1.e12/(waeff*q0*dv*grid_v)
+        #cont  = 1.e12/(waeff*q0*dv*grid_v)
+        #Switching to constant value that is in the fcs dictionary
+        cont = fcs[key]['cont']
 
         #sort by the velocity values when plotting
         sort = np.argsort(grid_v)
@@ -516,7 +518,7 @@ def create_fc_grid_plot(fcs,waeff=3.8e6,q0=1.6021892e-7):
 
     return fig,axs
 
-def create_multi_fc(dis_vdf,ncup,phi_lim=90.,tht_lim=30.,random_seed=None,v_rng=150.,v_smp=20,i_smp=15):
+def create_multi_fc(dis_vdf,ncup,phi_lim=90.,tht_lim=30.,random_seed=None,v_rng=150.,v_smp=20,i_smp=15,sc='wind'):
     """
     Create a random distribution of FC between +/- phi and theta limits,
     where phi is angle between FC normal and positive Xgse and theta is the angle
@@ -544,6 +546,8 @@ def create_multi_fc(dis_vdf,ncup,phi_lim=90.,tht_lim=30.,random_seed=None,v_rng=
         Number of measurment bins on the FC (Default = 20)
     i_smp:int
         Sampling of the integrating function in p',q',r' coordiantes in km/s (Default = 15)
+    sc: string, optional
+        Spacecraft effective area to use (Default = 'wind')
 
     Returns
     ----------
@@ -590,7 +594,8 @@ def create_multi_fc(dis_vdf,ncup,phi_lim=90.,tht_lim=30.,random_seed=None,v_rng=
         pls_fc = mdv.convert_gse_fc(pls_par,phi,theta)
 
         ####Assume a 45 FoV cut off
-        pls_fc[:3] *= np.cos(np.radians(45.))
+        #This is not correct 2019/03/18 J. Prchlik
+        ##pls_fc[:3] *= np.cos(np.radians(45.))
 
         #########################################
         #Set up observering condidtions before making any VDFs
@@ -609,7 +614,9 @@ def create_multi_fc(dis_vdf,ncup,phi_lim=90.,tht_lim=30.,random_seed=None,v_rng=
         if grid_v.max() > 1300.:
             grid_v -= 1300-grid_v.max()
         #get effective area of wind and other coversion parameters
-        waeff = 3.8e6 #cm^3/km
+        #waeff = 3.8e6 #cm^3/km
+        #Changing effective area calculation to the calcuated value not the best value 2019/03/18 J. Prchlik
+        waeff = mdv.eff_area(pls_fc[0],pls_fc[1],pls_fc[2],spacecraft=sc)
         q0    = 1.6021892e-7 # picocoulombs
         dv    = np.diff(grid_v)
         dv    = np.concatenate([dv,[dv[-1]]])
@@ -623,7 +630,7 @@ def create_multi_fc(dis_vdf,ncup,phi_lim=90.,tht_lim=30.,random_seed=None,v_rng=
         #rea_cur = mdv.arb_p_response(x_meas,dis_vdf,samp)
         rad_phi,rad_theta = np.radians((phi,theta))
         #here sampling is in km/s
-        rea_cur = mdv.arb_p_response(x_meas,dis_vdf,i_smp)
+        rea_cur = mdv.arb_p_response(x_meas,dis_vdf,i_smp,sc=sc)
         #switched back to static sampling but now using p',q',r' for sampling
         #rea_cur = mdv.arb_p_response_dyn_samp(x_meas,dis_vdf,peak)
     
