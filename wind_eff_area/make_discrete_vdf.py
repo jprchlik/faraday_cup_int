@@ -947,7 +947,7 @@ def sample_function(z_min,z_max,z_peak,max_s=45,min_s=30,wid_s=100):
 
 
 def arb_p_response_dyn_samp(x_meas,dis_vdf,z_peak,
-                            samp_func = sample_function):
+                            samp_func = sample_function,sc='wind'):
     """
     Parameters
     -----------
@@ -967,6 +967,8 @@ def arb_p_response_dyn_samp(x_meas,dis_vdf,z_peak,
         The location for peak sampling 
     samp_func: function, optional
         Dynamic function used to determine the sampling for a given set up x,y,z in FC coordinates (Default = sample_function).
+    sc: string, optional
+        Spacecraft effective area to use (Default = 'wind')
 
     Returns:
     --------
@@ -1005,7 +1007,7 @@ def arb_p_response_dyn_samp(x_meas,dis_vdf,z_peak,
 
         inp = np.array([fc_vlo,fc_vhi,phi_ang,theta_ang])
 
-        out = fc_meas(dis_vdf,inp,samp=samp)
+        out = fc_meas(dis_vdf,inp,samp=samp,sc=sc)
         #print(out)
         dis_cur.append(out)
 
@@ -1014,7 +1016,7 @@ def arb_p_response_dyn_samp(x_meas,dis_vdf,z_peak,
     return dis_cur
 
 
-def arb_p_response(x_meas,dis_vdf,samp):
+def arb_p_response(x_meas,dis_vdf,samp,sc='wind'):
     """
     Parameters
     -----------
@@ -1032,8 +1034,11 @@ def arb_p_response(x_meas,dis_vdf,samp):
          A dictionary returned from make_discrete_vdf
 
     samp: int
-        Number of samples to use when doing the MidPointIntegration. 40 Seems to be a good mixture
-        of rapid integration and high precision. 
+        Velocity bins to use when doing the Mid-Point Integration. 10 km/s Seems to be a good mixture
+        of rapid integration and high precision for Wind observations. 
+
+    sc: string, optional
+        Spacecraft effective area to use (Default = 'wind')
 
     Returns:
     --------
@@ -1069,7 +1074,7 @@ def arb_p_response(x_meas,dis_vdf,samp):
         inp = np.array([fc_vlo,fc_vhi,phi_ang,theta_ang])
 
         #Do the integration for a given cup velocity range
-        out = fc_meas(dis_vdf,inp,samp=samp)
+        out = fc_meas(dis_vdf,inp,samp=samp,sc=sc)
         #print(out)
         dis_cur.append(out)
 
@@ -1252,12 +1257,12 @@ def eff_area(vx,vy,vz,spacecraft='wind'):
 
     Parameters
     ----------
-    vz: np.array
-        The velocity of the solar wind normal FC in km/s
     vx: np.array
         The velocity of the solar wind in the x direction with respect to the FC in km/s
     vy: np.array                                                                 
         The velocity of the solar wind in the y direction with respect to the FC in km/s
+    vz: np.array
+        The velocity of the solar wind normal FC in km/s
     
     Returns
     -------
@@ -1424,7 +1429,7 @@ def p_bimax_response(x_meas, p_solpar,spacecraft='wind'):
     # using the approximation that the flow is all coming in at the bulk
     # flow angle (i.e. the cold plasma approximation that the the thermal
     # speed is negligible)
-    a_eff_p = np.double(eff_area( vxmax, vymax,-vzmax))
+    a_eff_p = np.double(eff_area( vxmax, vymax, vzmax,spacecraft=spacecraft))
     
     # calculate modified gaussian integral of v*f(v). Limits in
     # transverse directions are infinity, i.e. approximate that the whole distribution is
