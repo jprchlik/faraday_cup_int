@@ -1365,7 +1365,7 @@ def vdf_calc(vx,vy,vz,hold_bfc=[1,1,1],hold_ufc=[1,1,1],hold_ifunc=lambda p,q: p
     ###print(vals)
     return np.array(vals)
 
-def p_bimax_response(x_meas, p_solpar):
+def p_bimax_response(x_meas, p_solpar,spacecraft='wind'):
     """
     Parameters:
     ----------- 
@@ -1379,6 +1379,9 @@ def p_bimax_response(x_meas, p_solpar):
                x[6,:]      b in FC "z" normal to cup
     p_solarpar: np.array
         The solar wind parameters in GSE coordinates [Vx,Vy,Vz,Bx,By,Bz] in units of [km/s,km/s,km/s,nT,nT,nT]
+
+    spacecraft: string, optional
+        The spacecraft to use for effective area calculations (Default = 'wind).
 
     Returns
     ------
