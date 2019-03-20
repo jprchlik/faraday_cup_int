@@ -196,7 +196,7 @@ def fmt_wind_spec(date,spec_dir='test_obs/test_wind_spectra/',parm_dir=None,
             #get effective area of wind and other coversion parameters
             #get effective area by interpolating the angle between solar wind and bulk flow
             #waeff = cup_intp(fc_bf) #cm^3/km
-            waeff = cup_intp(fc_bf)*1e6 #cm^3/km
+            waeff = cup_intp(fc_bf)*1e5 #cm^3/km
 
             #only include reasonable effective area values in calculations
             if fc_bf >= 59:
