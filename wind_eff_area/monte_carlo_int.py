@@ -1,7 +1,5 @@
 import numpy as np
 import mid_point_loop as mpl
-
-import numexpr as ne
 import time
 
 def mc_trip(int_3d,z_lo,z_hi,x_lo,x_hi,y_lo,y_hi,args=(),samp=1e5):
