@@ -446,7 +446,7 @@ def create_grid_vals_multi_fc(fcs,proc,cur_err,dis_vdf_guess,verbose=False):
         return fcs,cur_err,dis_vdf_guess
     
 
-def create_fc_grid_plot(fcs,waeff=3.8e6,q0=1.6021892e-7):
+def create_fc_grid_plot(fcs,waeff=3.8e6,q0=1.6021892e-7,log_plot=False,ylim=None):
     """
     Plot multiple FC on one grid of plots
 
@@ -458,6 +458,11 @@ def create_fc_grid_plot(fcs,waeff=3.8e6,q0=1.6021892e-7):
         Effective array of FC  (Default = 3.8e6 #cm^3/km, Wind)
     q0: float
         Some constant I can't recally this moment (Default  = 1.6021892e-7 # picocoulombs)
+    log_plot: boolean
+        Plot the velocity distributions in log space (Default = False)
+    ylim: list
+        A two value list to set the plot limits (Default = None). The first component is 
+        the minimum value, while the last component is the maximum value.
 
     Return
     -------
@@ -504,7 +509,16 @@ def create_fc_grid_plot(fcs,waeff=3.8e6,q0=1.6021892e-7):
         ax.text(0.05,0.8,'$\Phi$={0:2.1f}$^\circ$\n$\Theta$={1:2.1f}$^\circ$'.format(*np.degrees(fcs[key]['x_meas'][[2,3],0])),transform=ax.transAxes)
         #ax.plot(grid_v, gaus(grid_v,*popt),'--',marker='o',label='Gauss Fit',linewidth=3)
         fancy_plot(ax)
-        #ax.set_yscale('log')
+
+        #set the scale to log if log keyword set
+        if log_plot:
+            ax.set_yscale('log')
+
+        #set the y-limit to the ylim if the value is set
+        if ylim is not None:
+            ax.set_ylim(ylim)
+
+
         #only plot x-label if in the last row
         if counter >= (nrows-1)*(ncols):
            ax.set_xlabel('Speed [km/s]')
