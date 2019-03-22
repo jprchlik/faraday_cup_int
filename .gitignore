@@ -1,0 +1,7 @@
+*pyc
+.DS_Store
+docs/Makefile
+docs/build/
+tomography/
+venus_magneto_tail/
+wind_eff_area/nm_spectral_fit_changed_input_effective_area.pickle
