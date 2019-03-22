@@ -16,7 +16,7 @@ def make_discrete_vdf_add_fixed_kernel(dis_vdf,p,q,a_scale=0.1,p_sig=10.,q_sig=1
     Returns Discrete Velocity distribution function given a set of input parameters. With fixed variations 
     in the raw vdf
 
-    Parameters:
+    Parameters
     -----------
     
     dis_vdf: dictionary
@@ -34,7 +34,7 @@ def make_discrete_vdf_add_fixed_kernel(dis_vdf,p,q,a_scale=0.1,p_sig=10.,q_sig=1
     q_sig: float,optional
         Sigma of the added gaussian in q space in km/s (Default = 10)
 
-    Returns:
+    Returns
     ---------
     ran_vdf: dictionary
         Dictionary containing a discrete VDF function ['vdf'], the propogating direction grid ['pgrid'],
@@ -77,7 +77,7 @@ def get_variation_grid(fcs,dis_vdf,p_num=10,q_num=10,a_scale=0.1,nproc=10):
     """
     Returns grid of error values when adding a grid of Gaussian kernels
 
-    Parameters:
+    Parameters
     -----------
     fcs: dictionary
         Dictionary of multiple faraday cup measurements of the same solar wind
@@ -234,7 +234,7 @@ def create_random_vdf_multi_fc(fcs,nproc,cur_err,dis_vdf_guess,pred_grid,kernel,
         selecting a gaussian that adds to the vdf. The total probability must sum to 1 (default = [0.5,0.5]).
 
   
-    Usage
+    Examples
     ------
     create_random_vdf_multi_fc(proc,cur_err)
    
@@ -362,7 +362,7 @@ def create_grid_vals_multi_fc(fcs,proc,cur_err,dis_vdf_guess,verbose=False):
     -------
         looper[best_ind][1],tot_err[best[0]],dis_cur[best[0]]
   
-    Usage
+    Examples
     ------
     create_random_vdf_multi_fc(proc,cur_err)
    
@@ -684,10 +684,13 @@ def mc_reconstruct(fcs,nproc,dis_vdf,pred_grid,kernel,iters,
                   min_kernel=15.,verbose=False,counter=0,default_grid=None,
                   tol_cnt=100,return_convergence=False):
     """
-	mc_reconstruct attempts to reconstruct a 2D velocity distribution function (VDF) from multiple 1D Faraday Cup (FC) measurements. The program 
-	does this by iteratively adding a Gaussian kernel to a initial reconstruction of the 2D VDF. For each iteration, the program checks whether the added
-	Gaussian kernel reduces the squared residuals of the integrated "pseudo" 2D VDF compared to the 1D FC observations. If True, then the program accepts
-	the newly added Gaussian kernel to the 2D reconstruction, stores whether the kernel location, and whether the kernel was postive or negative. It uses
+	mc_reconstruct attempts to reconstruct a 2D velocity distribution function (VDF) from multiple 1D Faraday Cup (FC) measurements.
+
+    Notes
+    ------
+    The program does this by iteratively adding a Gaussian kernel to a initial reconstruction of the 2D VDF. For each iteration, the program checks whether the added
+    Gaussian kernel reduces the squared residuals of the integrated "pseudo" 2D VDF compared to the 1D FC observations. If True, then the program accepts
+    the newly added Gaussian kernel to the 2D reconstruction, stores whether the kernel location, and whether the kernel was postive or negative. It uses
     the kernel location to updated the probability array to allow more guesses in a radius equal to the parallel (p), perpendicular (q) value. It uses
     the kernel sign to decide whether the next guess should be positive or negative. If the function cannot find a improving kernel after tol_cnt iterations,
     it skrinks the kernel size by 10% and resets the probability array to the input value. The kernel size plateus at a min value of min_kernel. 
@@ -746,7 +749,8 @@ def mc_reconstruct(fcs,nproc,dis_vdf,pred_grid,kernel,iters,
     fcs,dis_vdf,pred_grid,kernel,improved,ip,iq,n_p_prob,counter, (per_err_list)
         All input parameters updated by this module. If return_convergence is True then return percent error
         per iteration number (per_err_list) in addition to previous parameters
-   
+
+
     """
 
     #set default grid if not set
@@ -985,26 +989,27 @@ def gauss_2d_reconstruct(z,fcs,cur_vdf,add_ring=False,nproc=8,samp=15.):
     return fcs_err
 
 
-def ring_vdf(cur_vdf,vx,vy,vz,wper,wpar,den,q_r,p_r,wper_r,wpar_r,peak_r):
-        #                   Vx,Vy,Vz,Wper,Wpar, Np
-    pls_par = np.array([vx,vy,vz,wper, wpar, den]) 
-    
-    #Get static variables from cur_vdf to add to creation of new guess VDF
-    vel_clip = cur_vdf['pgrid'].max()
-    pres     = np.mean(np.diff(cur_vdf['pgrid'][:,0]))
-    qres     = np.mean(np.diff(cur_vdf['qgrid'][0,:]))
-    
-    #Create new VDF guess based on input parameters
-    dis_vdf = mdv.make_discrete_vdf(pls_par,cur_vdf['b_gse'],pres=pres,qres=qres,clip=vel_clip) 
-    
-    #Add ring to fit
-    #Add a positive Gaussian Kernal to "Measured" VDF
-    dis_vdf['vdf'] += peak_r*np.exp(- ((dis_vdf['pgrid']-(p_r))/wpar_r)**2. - ((dis_vdf['qgrid']-(q_r))/wper_r)**2.)
-    #update the interpolator function
-    dis_vdf['vdf_func'] =  RectBivariateSpline(dis_vdf['pgrid'][:,0],dis_vdf['qgrid'][0,:],dis_vdf['vdf'])
-    
-    return dis_vdf
-
+#Removed because no longer used as a separate call. Built into the main call discrete_vdf
+#def ring_vdf(cur_vdf,vx,vy,vz,wper,wpar,den,q_r,p_r,wper_r,wpar_r,peak_r):
+#        #                   Vx,Vy,Vz,Wper,Wpar, Np
+#    pls_par = np.array([vx,vy,vz,wper, wpar, den]) 
+#    
+#    #Get static variables from cur_vdf to add to creation of new guess VDF
+#    vel_clip = cur_vdf['pgrid'].max()
+#    pres     = np.mean(np.diff(cur_vdf['pgrid'][:,0]))
+#    qres     = np.mean(np.diff(cur_vdf['qgrid'][0,:]))
+#    
+#    #Create new VDF guess based on input parameters
+#    dis_vdf = mdv.make_discrete_vdf(pls_par,cur_vdf['b_gse'],pres=pres,qres=qres,clip=vel_clip) 
+#    
+#    #Add ring to fit
+#    #Add a positive Gaussian Kernal to "Measured" VDF
+#    dis_vdf['vdf'] += peak_r*np.exp(- ((dis_vdf['pgrid']-(p_r))/wpar_r)**2. - ((dis_vdf['qgrid']-(q_r))/wper_r)**2.)
+#    #update the interpolator function
+#    dis_vdf['vdf_func'] =  RectBivariateSpline(dis_vdf['pgrid'][:,0],dis_vdf['qgrid'][0,:],dis_vdf['vdf'])
+#    
+#    return dis_vdf
+#
 
 
 def gennorm_2d_reconstruct(z,fcs,cur_vdf,add_ring=False,nproc=8,samp=15.):
