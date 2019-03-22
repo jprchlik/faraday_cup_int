@@ -94,6 +94,10 @@ First, you will need to import the modules needed to successfully call the code.
     
     mff.create_fc_grid_plot(fcs)
 
+.. image:: _static/fc_measurements_before_model.png
+   :alt: FC Obs. Plot
+   :align: center
+   :scale: 60%
 
 .. code-block:: python
 
