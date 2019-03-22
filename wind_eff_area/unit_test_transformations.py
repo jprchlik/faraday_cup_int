@@ -61,7 +61,7 @@ def get_phi_theta(fc_vec):
     """
     Get Phi and Theta from definition of normal vector with respect to GSE coordinates
 
-    Input
+    Parameters
     -------
     fc_vec: np.array
         Three components of direction of FC normal with respect to GSE coordinates
@@ -262,12 +262,12 @@ def calc_cont(grid_v):
     """
     Calculate constant to change from measured current to particles per velocity bin
    
-    Input
+    Parameters
     ------
     grid_v: np.array 
         Grid of velocities for the measured FC
 
-    Output
+    Returns
     -------
     cont: np.array
         Constants which will turn current in a velocity grid into particles in a velocity
@@ -296,7 +296,7 @@ def test_pars_one_fc_1(plot=False):
     #have FC also aligned with magnetic field velocity field        
     fc_vec = mag_par
 
-    #get phi and theta for particular input values
+    #get phi and theta for particular Parameters values
     phi, theta = get_phi_theta(-fc_vec)
 
     phi,theta = np.degrees([phi,theta])
@@ -317,7 +317,7 @@ def test_pars_one_fc_1(plot=False):
     cont = calc_cont(grid_v)
 
     #calculate x_meas array
-    #phi and theta should be input in degrees
+    #phi and theta should be Parameters in degrees
     x_meas = mdv.make_fc_meas(dis_vdf,fc_spd=grid_v,fc_phi=phi,fc_theta=theta)
 
     #compute the observed current in the instrument
@@ -344,7 +344,7 @@ def test_pars_one_fc_1(plot=False):
     #print(u,w,n)
 
     fig, ax = plt.subplots()
-    ax.plot(grid_v,rea_cur.ravel()*cont,'-.b',label='Input',linewidth=3)
+    ax.plot(grid_v,rea_cur.ravel()*cont,'-.b',label='Parameters',linewidth=3)
     ax.plot(grid_v,col_cur*cont,'--r',label='Cold',linewidth=3)
     #ax.plot(grid_v, gaus(grid_v,*popt),'--',marker='o',label='Gauss Fit',linewidth=3)
     #ax.plot(grid_v,init_guess.ravel()*cont,':',color='purple',label='Init. Guess',linewidth=3)
@@ -378,7 +378,7 @@ def test_pars_one_fc_2(plot=False):
     #Use a random magnetic field vector follows plasma vector
     mag_par =  [np.cos(np.degrees(75.)), np.sin(np.degrees(75.)), 0.]# chosen arbitrarily
 
-    #get phi and theta for particular input values
+    #get phi and theta for particular Parameters values
     phi,theta = -10,4
 
     #number of sample for integration aming for 2 part in 1,000
@@ -396,7 +396,7 @@ def test_pars_one_fc_2(plot=False):
     cont = calc_cont(grid_v)
 
     #calculate x_meas array
-    #phi and theta should be input in degrees
+    #phi and theta should be Parameters in degrees
     x_meas = mdv.make_fc_meas(dis_vdf,fc_spd=grid_v,fc_phi=phi,fc_theta=theta)
 
     #compute the observed current in the instrument
@@ -407,7 +407,7 @@ def test_pars_one_fc_2(plot=False):
     col_cur = mdv.p_bimax_response(x_meas,np.concatenate([pls_par,mag_par]))
 
     fig, ax = plt.subplots()
-    ax.plot(grid_v,rea_cur.ravel()*cont,'-.b',label='Input',linewidth=3)
+    ax.plot(grid_v,rea_cur.ravel()*cont,'-.b',label='Parameters',linewidth=3)
     ax.plot(grid_v,col_cur*cont,'--r',label='Cold',linewidth=3)
     #ax.plot(grid_v, gaus(grid_v,*popt),'--',marker='o',label='Gauss Fit',linewidth=3)
     #ax.plot(grid_v,init_guess.ravel()*cont,':',color='purple',label='Init. Guess',linewidth=3)

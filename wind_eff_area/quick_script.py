@@ -24,7 +24,7 @@ def create_random_vdf(dis_vdf_guess,nproc,n_p_prob):
     proc : int
         Number of processors to run on
     n_p_prob: np.array
-        A two element array specifying probability the gaussian kernal is positive or negative
+        A two element array specifying probability the gaussian kernel is positive or negative
     Returns
     -------
         looper[best_ind][1],tot_err[best[0]],dis_cur[best[0]]
@@ -107,8 +107,8 @@ def create_random_vdf(dis_vdf_guess,nproc,n_p_prob):
 ####    else:
 ####        #Add Guassian 2D perturbation
 ####        #create Vper and Vpar VDF with pertabation from first key because VDF is the same for all FC
-####        #use 3% of total width for Gaussian kernals instead of 10% 2018/09/19 J. Prchlik
-####        kernal_size = cur_err/tot_I*100.
+####        #use 3% of total width for Gaussian kernels instead of 10% 2018/09/19 J. Prchlik
+####        kernel_size = cur_err/tot_I*100.
 ####        
 ####        dis_vdf_bad = mdv.make_discrete_vdf_random(dis_vdf_guess,sc_range=sc_range,p_sig=3.,q_sig=3.)
 ####                        
@@ -444,14 +444,17 @@ ip,iq = 0.,0.
 start_loop = time.time()
 #takes about 1000 iterations to converge (~30 minutes), but converged to the wrong solution, mostly overestimated the peak
 #removed to test improving fit
-for i in range(80000):
+for i in range(1):
     #get a new vdf and return if it is the best fit
     #dis_vdf_bad,tot_error,dis_cur = create_random_vdf(dis_vdf_bad,nproc,n_p_prob)
     print('##############################################')
+    print('Before')
     print(ip,iq,n_p_prob)
     fcs,tot_err,dis_vdf_bad,improved,ip,iq,n_p_prob = mff.create_random_vdf_multi_fc(fcs,nproc,tot_err,dis_vdf_bad,cont,
                                                                             improved=improved,ip=ip,iq=iq,n_p_prob=n_p_prob,
                                                                             sc_range=per_err,samp=samp)
+    print('After')
+    print(ip,iq,n_p_prob)
     per_err = tot_err
 
     print('Total error for iteration {0:1d} is {1:4.3e}%'.format(i,100.*float(tot_err)))
@@ -484,52 +487,54 @@ idl_cur = np.array([4.5560070e-11,7.7672213e-11,1.1308081e-10,1.4061885e-10,1.49
                    ,1.4816679e-15,2.0473478e-16,2.4185986e-17,2.4426542e-18])
 
 
+mff.create_fc_grid_plot(fcs)
 
-#create a square as possible plot
-nrows = int(np.sqrt(len(fcs.keys())))
-ncols = len(fcs.keys())/nrows
-#add an extra column if needed
-if nrows*ncols < len(fcs.keys()): 
-    ncols += 1
-   
-#ax.plot(grid_v,col_cur*cont,'--r',label='Cold',linewidth=3)
-
-#Get the average current and plot
-#removed 2018/09/11 J. Prchlik No longer calculating an average from many integrations
-#ave_cur = np.array(dis_cur).mean(axis=0)
-#std_cur = np.array(dis_cur[1::5]).std(axis=0)/np.sqrt(2)
-
-#print percent error
-print('Cold Case Current to Integrated Current')
-#print(abs(col_cur-ave_cur)/ave_cur)
-
-#ax.plot(grid_v,ave_cur,label='Midpoint Intgration',linewidth=3,color='black')
-#ax.errorbar(grid_v,ave_cur,yerr=std_cur,label=None,color='black',linewidth=3)
-
-#create figure to plot
-fig, axs = plt.subplots(ncols=ncols,nrows=nrows,sharex=True,sharey=True,figsize=(3*ncols,3*nrows))
-fig.subplots_adjust(wspace=0.01,hspace=0.01)
-counter = 0
-for key,ax in zip(fcs.keys(),axs.ravel()):
-    #removed to test improving Gaussian fit
-    ax.plot(grid_v,fcs[key]['dis_cur'].ravel()*cont,label='Best MC',color='black',linewidth=3)
-    ax.plot(grid_v,fcs[key]['rea_cur'].ravel()*cont,'-.b',label='Input',linewidth=3)
-    #ax.plot(grid_v,rea_cur.ravel()*cont,'-.b',label='Input',linewidth=3)
-    ax.plot(grid_v,fcs[key]['init_guess'].ravel()*cont,':',color='purple',label='Init. Guess',linewidth=3)
-    ax.text(0.05,0.8,'$\Phi$={0:2.1f}$^\circ$\n$\Theta$={1:2.1f}$^\circ$'.format(*np.degrees(fcs[key]['x_meas'][[2,3],0])),transform=ax.transAxes)
-    #ax.plot(grid_v, gaus(grid_v,*popt),'--',marker='o',label='Gauss Fit',linewidth=3)
-    fancy_plot(ax)
-    #ax.set_yscale('log')
-    #only plot x-label if in the last row
-    if counter >= (nrows-1)*(ncols):
-       ax.set_xlabel('Speed [km/s]')
-    #set ylabel on the left edge
-    if np.isclose(float(counter)/ncols - int(counter/ncols),0):
-        ax.set_ylabel('p/cm$^{-3}$/(km/s)')
-    #put legend only on the first plot
-    if counter == 0:
-        ax.legend(loc='best',frameon=False)
-    counter += 1
+#####create a square as possible plot
+####nrows = int(np.sqrt(len(fcs.keys())))
+####ncols = len(fcs.keys())/nrows
+#####add an extra column if needed
+####if nrows*ncols < len(fcs.keys()): 
+####    ncols += 1
+####   
+#####ax.plot(grid_v,col_cur*cont,'--r',label='Cold',linewidth=3)
+####
+#####Get the average current and plot
+#####removed 2018/09/11 J. Prchlik No longer calculating an average from many integrations
+#####ave_cur = np.array(dis_cur).mean(axis=0)
+#####std_cur = np.array(dis_cur[1::5]).std(axis=0)/np.sqrt(2)
+####
+#####print percent error
+####print('Cold Case Current to Integrated Current')
+#####print(abs(col_cur-ave_cur)/ave_cur)
+####
+#####ax.plot(grid_v,ave_cur,label='Midpoint Intgration',linewidth=3,color='black')
+#####ax.errorbar(grid_v,ave_cur,yerr=std_cur,label=None,color='black',linewidth=3)
+####
+#####create figure to plot
+####fig, axs = plt.subplots(ncols=ncols,nrows=nrows,sharex=True,sharey=True,figsize=(3*ncols,3*nrows))
+####fig.subplots_adjust(wspace=0.01,hspace=0.01)
+####counter = 0
+####for k,ax in zip(range(len(fcs.keys())),axs.ravel()):
+####    key = 'fc_{0:1d}'.format(k)
+####    #removed to test improving Gaussian fit
+####    ax.plot(grid_v,fcs[key]['dis_cur'].ravel()*cont,label='Best MC',color='black',linewidth=3)
+####    ax.plot(grid_v,fcs[key]['rea_cur'].ravel()*cont,'-.b',label='Input',linewidth=3)
+####    #ax.plot(grid_v,rea_cur.ravel()*cont,'-.b',label='Input',linewidth=3)
+####    ax.plot(grid_v,fcs[key]['init_guess'].ravel()*cont,':',color='purple',label='Init. Guess',linewidth=3)
+####    ax.text(0.05,0.8,'$\Phi$={0:2.1f}$^\circ$\n$\Theta$={1:2.1f}$^\circ$'.format(*np.degrees(fcs[key]['x_meas'][[2,3],0])),transform=ax.transAxes)
+####    #ax.plot(grid_v, gaus(grid_v,*popt),'--',marker='o',label='Gauss Fit',linewidth=3)
+####    fancy_plot(ax)
+####    #ax.set_yscale('log')
+####    #only plot x-label if in the last row
+####    if counter >= (nrows-1)*(ncols):
+####       ax.set_xlabel('Speed [km/s]')
+####    #set ylabel on the left edge
+####    if np.isclose(float(counter)/ncols - int(counter/ncols),0):
+####        ax.set_ylabel('p/cm$^{-3}$/(km/s)')
+####    #put legend only on the first plot
+####    if counter == 0:
+####        ax.legend(loc='best',frameon=False)
+####    counter += 1
 #plt.show()
 
 #Best Fit MC VDF

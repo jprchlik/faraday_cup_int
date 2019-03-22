@@ -5,7 +5,7 @@ import time
 def mc_trip(int_3d,z_lo,z_hi,x_lo,x_hi,y_lo,y_hi,args=(),samp=1e5):
     """
     Monte carlo integrator for solar wind on generic Faraday Cup
-    Works but takes 30s per run to achieve a reasonable precision (samp = 1e6)
+    Works but takes 30s per run to achieve a reasonable precision (samp = 1e5)
 
     Parameters
     ---------- 

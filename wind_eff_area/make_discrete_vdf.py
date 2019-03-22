@@ -6,7 +6,6 @@ from scipy.interpolate import RectBivariateSpline
 from scipy.special import erf
 import monte_carlo_int as mci
 from scipy.stats import gennorm
-import sympy
 import time
 
 
@@ -16,6 +15,7 @@ def solve_sing_decomp(phi,theta):
 
     Parameters
     ----------
+
     phi: np.arary or float
         Phi angle values of FC in radians (must be the same length as theta)
     theta: np.array or float
@@ -23,14 +23,15 @@ def solve_sing_decomp(phi,theta):
     
     Returns
     -------
-        u_svdc: np.array
-            A three column by size of phi (i.e. number of FC) orthoginal array used for decomposition.
-        w_svdc: np.array
-            Three element vector containing the singular values
-        v_svdc: np.array
-            A three column by three row orthoginal array used for decomposition.
-        wp_svdc: np.array
-            A 3x3 diagonal matrix with the diagonal containing values of 1./w_svdc.  
+
+    u_svdc: np.array
+        A three column by size of phi (i.e. number of FC) orthoginal array used for decomposition.
+    w_svdc: np.array
+        Three element vector containing the singular values
+    v_svdc: np.array
+        A three column by three row orthoginal array used for decomposition.
+    wp_svdc: np.array
+        A 3x3 diagonal matrix with the diagonal containing values of 1./w_svdc.  
     """
 
     #number of faraday cup angles
@@ -90,14 +91,14 @@ def make_discrete_vdf(pls_par,mag_par,pres=0.5,qres=0.5,clip=300.,add_ring=[]):
     """
     Returns Discrete Velocity distribution function given a set of input parameters.
 
-    Parameters:
+    Parameters
     -----------
     pls_par: np.array
         A numpy array of plasma parameters in the following order: Vx,Vy,Vz,Wper,Wpar,Np.
         That is the proton velocity in the solar wind in X GSE, Y GSE, and Z GSE in km/s,
         followed by the thermal width perpendicular and parallel to the magnetic field normal,
         and finally the proton number density in cm^{-3}. Wper and Wpar are assumed to be 
-        Sigma values not Full Width at half maximum.
+        Sigma values.
     
     mag_par: np.array
         A numpy array of the magnetic field normal in the following order : bx, by, and bz.
@@ -120,7 +121,7 @@ def make_discrete_vdf(pls_par,mag_par,pres=0.5,qres=0.5,clip=300.,add_ring=[]):
         maximum value of the added ring. The variable must be 5 elements long 
         or the code will not add a ring distribution.
 
-    Returns:
+    Returns
     ---------
     dis_vdf: dictionary
         Dictionary containing a discrete VDF function ['vdf'], the propogating direction grid ['pgrid'],
@@ -176,15 +177,15 @@ def make_discrete_gennorm_vdf(pls_par,mag_par,pres=0.5,qres=0.5,clip=300.,add_ri
     """
     Returns Discrete Velocity distribution function given a set of input parameters.
 
-    Parameters:
+    Parameters
     -----------
     pls_par: np.array
-        A numpy array of plasma parameters in the following order: Vx,Vy,Vz,Wper,Wpar,Np,sper, and spar.
+        A numpy array of plasma parameters in the following order: Vx,Vy,Vz,Wper,Wpar,The Peak (not Density),sper, and spar.
         That is the proton velocity in the solar wind in X GSE, Y GSE, and Z GSE in km/s,
         followed by the thermal width perpendicular and parallel to the magnetic field normal,
         and finally the proton number density in cm^{-3}. Respectively, sper and spar correspond to
         the s parameter of a generalized noramal distribution (Nadarajah 2005), where s=2 is a Gaussian.
-        Wper and Wpar are assumed to be sigma values not Full Width at half maximum.
+        Wper and Wpar are assumed to be sigma values.
     
     mag_par: np.array
         A numpy array of the magnetic field normal in the following order : bx, by, and bz.
@@ -207,7 +208,7 @@ def make_discrete_gennorm_vdf(pls_par,mag_par,pres=0.5,qres=0.5,clip=300.,add_ri
         maximum value of the added ring, sper_r and spar_r are the s parameter of a generalized
         normal distribution. The variable must be 7 elements long or the code will not add a ring distribution.
 
-    Returns:
+    Returns
     ---------
     dis_vdf: dictionary
         Dictionary containing a discrete VDF function ['vdf'], the propogating direction grid ['pgrid'],
@@ -298,7 +299,7 @@ def make_discrete_vdf_random(dis_vdf,normval,improved=False,sc_range=0.1,p_sig=1
     Returns Discrete Velocity distribution function given a set of input parameters. With random variations 
     in the raw vdf
 
-    Parameters:
+    Parameters
     -----------
     
     dis_vdf: dictionary
@@ -328,7 +329,7 @@ def make_discrete_vdf_random(dis_vdf,normval,improved=False,sc_range=0.1,p_sig=1
         Location of the last Gaussian kernel guess in the Q coordinate (Default = 0.). If improved is true then
         this coordinate improved the fit and will be used for the next guess.
 
-    Returns:
+    Returns
     ---------
     ran_vdf: dictionary
         Dictionary containing a discrete VDF function ['vdf'], the propogating direction grid ['pgrid'],
@@ -512,7 +513,7 @@ def find_best_vths(wa,we,pls_par,mag_par,rea_cur,inpt_x,pres=1.00,qres=1.00,wara
     Varies the thermal width on one faraday cup to get the best fit initial guess solution. 
     Based on fit values of components
    
-    Call
+    Example
     ----------
     wa, we =  mdv.find_best_vths(wa,we,pls_par_bad,rea_cur,inpt_x)
 
@@ -953,13 +954,13 @@ def arb_p_response_dyn_samp(x_meas,dis_vdf,z_peak,
     -----------
     x_meas: np.array
          expect x_meas array in the same format as the wind code
-               x[0,:]          v_window  [km/s] 
-               x[1,:]          v_delta   [km/s] 
-               x[2,:]          phi_ang [rad] 
-               x[3,:]          theta_ang [rad] 
-               x[4,:]      b in FC "x"
-               x[5,:]      b in FC "y"
-               x[6,:]      b in FC "z" normal to cup
+         x[0,:]          v_window  [km/s] 
+         x[1,:]          v_delta   [km/s] 
+         x[2,:]          phi_ang [rad] 
+         x[3,:]          theta_ang [rad] 
+         x[4,:]      b in FC "x"
+         x[5,:]      b in FC "y"
+         x[6,:]      b in FC "z" normal to cup
         
     dis_vdf: dictionary
         A dictionary returned from make_discrete_vdf
@@ -970,7 +971,7 @@ def arb_p_response_dyn_samp(x_meas,dis_vdf,z_peak,
     sc: string, optional
         Spacecraft effective area to use (Default = 'wind')
 
-    Returns:
+    Returns
     --------
     dis_cur: np.array
         Discrete values of the measured current in the FC at x[0,:] velocity windows
@@ -1021,14 +1022,14 @@ def arb_p_response(x_meas,dis_vdf,samp,sc='wind'):
     Parameters
     -----------
     x_meas: np.array
-         expect x_meas array in the same format as the wind code
-               x[0,:]          v_window  [km/s] 
-               x[1,:]          v_delta   [km/s] 
-               x[2,:]          phi_ang [rad] 
-               x[3,:]          theta_ang [rad] 
-               x[4,:]      b in FC "x"
-               x[5,:]      b in FC "y"
-               x[6,:]      b in FC "z" normal to cup
+         expect x_meas array in the same format as the Wind code
+         x[0,:]          v_window  [km/s] 
+         x[1,:]          v_delta   [km/s] 
+         x[2,:]          phi_ang [rad] 
+         x[3,:]          theta_ang [rad] 
+         x[4,:]      b in FC "x"
+         x[5,:]      b in FC "y"
+         x[6,:]      b in FC "z" normal to cup
         
     dis_vdf: dictionary
          A dictionary returned from make_discrete_vdf
@@ -1040,7 +1041,7 @@ def arb_p_response(x_meas,dis_vdf,samp,sc='wind'):
     sc: string, optional
         Spacecraft effective area to use (Default = 'wind')
 
-    Returns:
+    Returns
     --------
     dis_cur: np.array
         Discrete values of the measured current in the FC at x[0,:] velocity windows
@@ -1101,7 +1102,7 @@ def fc_meas(vdf,fc,fov_ang=45.,sc ='wind',samp=10):
     samp: int, optional
        Sampling frequency in km/s
 
-    Return:
+    Returns
     ---------
     meas: float or np.array
         Measured current in FC
@@ -1372,7 +1373,7 @@ def vdf_calc(vx,vy,vz,hold_bfc=[1,1,1],hold_ufc=[1,1,1],hold_ifunc=lambda p,q: p
 
 def p_bimax_response(x_meas, p_solpar,spacecraft='wind'):
     """
-    Parameters:
+    Parameters
     ----------- 
     x_meas: np.array
                x[0,:]          v_window  [km/s] 
