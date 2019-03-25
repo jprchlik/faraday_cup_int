@@ -446,7 +446,7 @@ def create_grid_vals_multi_fc(fcs,proc,cur_err,dis_vdf_guess,verbose=False):
         return fcs,cur_err,dis_vdf_guess
     
 
-def create_fc_grid_plot(fcs,waeff=3.8e6,q0=1.6021892e-7,log_plot=False,ylim=None):
+def create_fc_grid_plot(fcs,waeff=3.8e6,log_plot=False,ylim=None):
     """
     Plot multiple FC on one grid of plots
 
@@ -455,9 +455,9 @@ def create_fc_grid_plot(fcs,waeff=3.8e6,q0=1.6021892e-7,log_plot=False,ylim=None
     fcs: dictionary
         Dictionary of FC measurements
     waeff: float, optional
-        Effective array of FC  (Default = 3.8e6 #cm^3/km, Wind)
-    q0: float
-        Some constant I can't recally this moment (Default  = 1.6021892e-7 # picocoulombs)
+        Effective array of FC  (Default = 3.8e6 #cm^3/km, Wind). This only comes into effect
+        if a 'cont' keyword does not exist in the fcs dictionary. The 'cont' keyword will exist if 
+        read in the observations using the read_fmt_obs module.
     log_plot: boolean
         Plot the velocity distributions in log space (Default = False)
     ylim: list
@@ -470,6 +470,11 @@ def create_fc_grid_plot(fcs,waeff=3.8e6,q0=1.6021892e-7,log_plot=False,ylim=None
         The created plots figure and axis objects
     """
 
+
+
+
+    #elemetary charge
+    q0  = 1.6021892e-7 # picocoulombs
 
 
     #create a square as possible plot
@@ -490,19 +495,31 @@ def create_fc_grid_plot(fcs,waeff=3.8e6,q0=1.6021892e-7,log_plot=False,ylim=None
         #first column of x_measure is the velocity grid
         grid_v = fcs[key]['x_meas'][0,:]
         dv    =  fcs[key]['x_meas'][1,:]
-        #cont  = 1.e12/(waeff*q0*dv*grid_v)
-        #Switching to constant value that is in the fcs dictionary
-        cont = fcs[key]['cont']
+
+        #check to see if a constant value is already defined fcs dictionary
+        if 'cont' in fcs[key]:
+            #Switching to constant value that is in the fcs dictionary
+            cont = fcs[key]['cont'].ravel()
+        #Otherwise set a constant value equal using the constant effective area used above
+        else:
+            cont  = 1.e12/(waeff*q0*dv*grid_v)
+
 
         #sort by the velocity values when plotting
         sort = np.argsort(grid_v)
 
         #removed to test improving Gaussian fit
         #add checks to plot only variables that are defined
+        #Plot best fit model
         if 'dis_cur' in fcs[key]:
-            ax.plot(grid_v[sort],fcs[key]['dis_cur'].ravel()[sort]*cont,label='Best MC',color='black',linewidth=3)
+            ax.plot(grid_v[sort],fcs[key]['dis_cur'].ravel()[sort]*cont,label='Best Mod.',color='black',linewidth=3)
+        #Plot measurements from the FC
         if 'rea_cur' in fcs[key]:
-            ax.plot(grid_v[sort],fcs[key]['rea_cur'].ravel()[sort]*cont,'-.b',label='Input',linewidth=3)
+            ax.plot(grid_v[sort].ravel(),fcs[key]['rea_cur'].ravel()[sort]*cont,'-.b',label='Input',linewidth=3)
+        #plot error in measurements
+        if 'unc' in fcs[key]:
+            ax.errorbar(grid_v[sort],fcs[key]['rea_cur'].ravel()[sort]*cont,yerr=fcs[key]['unc'][sort]*cont,fmt='o',label=None,color='blue')
+        
         #ax.plot(grid_v,rea_cur.ravel()*cont,'-.b',label='Input',linewidth=3)
         if 'init_guess' in fcs[key]:
             ax.plot(grid_v[sort],fcs[key]['init_guess'].ravel()[sort]*cont,':',color='purple',label='Init. Guess',linewidth=3)
@@ -519,6 +536,7 @@ def create_fc_grid_plot(fcs,waeff=3.8e6,q0=1.6021892e-7,log_plot=False,ylim=None
             ax.set_ylim(ylim)
 
 
+
         #only plot x-label if in the last row
         if counter >= (nrows-1)*(ncols):
            ax.set_xlabel('Speed [km/s]')
@@ -529,6 +547,12 @@ def create_fc_grid_plot(fcs,waeff=3.8e6,q0=1.6021892e-7,log_plot=False,ylim=None
         if counter == 0:
             ax.legend(loc='best',frameon=False)
         counter += 1
+
+    #Need to put this outside loop
+    #pad 20% x-lim for angle labels on plot
+    x_lim = np.array(ax.get_xlim())
+    x_lim[0] -= 0.2*(x_lim[1]-x_lim[0])
+    ax.set_xlim(x_lim)
 
     return fig,axs
 
@@ -1029,7 +1053,8 @@ def gauss_2d_reconstruct(z,fcs,cur_vdf,add_ring=False,nproc=8,samp=15.):
 def gennorm_2d_reconstruct(z,fcs,cur_vdf,add_ring=False,nproc=8,samp=15.):
     """
     Function that reconstructs the 2D velocity distribution in the V parallel
-    and V perp reference frame by assuming a 2D Gaussian.
+    and V perp reference frame by assuming a 2D Gaussian. If the fcs dictionary
+    has an 'unc' key, then value returned is the $\Chi^2$ per FC per DoF. 
     
     Parameters
     ------------
@@ -1085,6 +1110,12 @@ def gennorm_2d_reconstruct(z,fcs,cur_vdf,add_ring=False,nproc=8,samp=15.):
         #Switched to generalized normal distribution 2019/02/07 J. Prchlik see https://docs.scipy.org/doc/scipy-0.16.1/reference/generated/scipy.stats.gennorm.html
         dis_vdf = mdv.make_discrete_gennorm_vdf(pls_par,cur_vdf['b_gse'],pres=pres,qres=qres,clip=vel_clip) 
       
+
+
+    #Check if errors are stored in the FC directory
+    has_unc = False
+    if 'unc' in fcs[fcs.keys()[0]].keys():
+        has_unc = True
     
     looper = []
     #loop over all fc in fcs to populate with new VDF guess
@@ -1111,19 +1142,108 @@ def gennorm_2d_reconstruct(z,fcs,cur_vdf,add_ring=False,nproc=8,samp=15.):
     #get sum squared best fit
     tot_err = np.zeros(dis_cur.shape[0])
     tot_int = np.zeros(dis_cur.shape[0])
-    #Get error in each faraday cup
-    for j,i in enumerate(index):
-        tot_err[j] = np.sum((dis_cur[j,:] - fcs[i]['rea_cur'])**2)
-        tot_int[j] = np.sum((fcs[i]['rea_cur'])**2)
 
-    #print(tot_err)
-    #total error for all fc
-    #tot_err[tot_int < 1e-25] = 0
-    #fcs_err = np.median(tot_err)
-    fcs_err = np.sqrt(np.sum(tot_err**2) /np.sum(tot_int**2))
-    #Remove really bad values from guess fitting
+    
+    #Use X^2 if program has uncertainties
+    if has_unc:
+        #Get error in each faraday cup
+        #Get X^2 per faraday cup
+        for j,i in enumerate(index):
+            tot_err[j] = np.sum((dis_cur[j,:] - fcs[i]['rea_cur'])**2/(fcs[i]['unc']**2))
+
+        #Get total X^2 per FC per DoF
+        fcs_err = np.sum(tot_err)/len(z)/index.size
+
+    else:
+        #Get error in each faraday cup
+        for j,i in enumerate(index):
+            tot_err[j] = np.sum((dis_cur[j,:] - fcs[i]['rea_cur'])**2)
+            tot_int[j] = np.sum((fcs[i]['rea_cur'])**2)
+
+        fcs_err = np.sqrt(np.sum(tot_err**2) /np.sum(tot_int**2))
 
         
     return fcs_err
 
 
+def cal_covar_nm(simplex,func,mag_par):
+    """
+    Calculates the uncertainties in the Nelder-Mead optimazation solution.
+
+    Parameters
+    ----------
+    simplex: np.array
+        The simplex array from a scipy.optimize fit. The array will have (N+1,N) parameters,
+        where N is the number of parameters in the fit. For more details on the uncertainty 
+        calculation see the Appendix A of Nelder and Mead (1965).
+
+    func: function
+        The function used in the minimization processs.
+
+    mag_par: np.array
+        A numpy array of the magnetic field normal in the following order : bx, by, and bz.
+        The normal vectors should be defined in GSE coordinates.
+
+
+    Returns
+    -------
+    covar: np.array
+        A NxN covarience matrix, where N is the number of paramters in the fit model.
+    """
+
+    #a0 simplex coefficient Value of the function at the first simplex point
+    a0 = func(simplex[0,:],mag_par)
+
+    #simplex long axis
+    sim_lng = simplex[:,0].size
+
+    #Functional result of values at the simplex points. The array size is N+1
+    yi = np.zeros(sim_lng)
+
+    #Functional result of the midpoint simplex points. The array size is (N+1)x(N+1)
+    yij = np.zeros((sim_lng,sim_lng))
+
+    #ai parameter array
+    ai = np.zeros(sim_lng-1)
+
+    #aij parameter matrix
+    bij = np.zeros((sim_lng-1,sim_lng-1))
+
+    #The Q system
+    Q = np.zeros((sim_lng-1,sim_lng-1))
+
+    #populate simplex array values 
+    for i in range(sim_lng):
+        #populate yi along simplex points
+        yi[i] = func(simplex[i,:],mag_par)
+   
+        #populate yij for midpoints
+        for j in range(sim_lng):
+            yij[i,j] = func(((simplex[i,:]+simplex[j,:])/2.),mag_par)
+
+        #skip calculation of coefficients if it is the zeroth simplex array
+        if i == 0:
+            continue
+
+        #populate ai parameter array
+        ai[i-1] = 2.*yij[0,i]-(yi[i]+3*a0)/2.
+  
+        #get off set for smaller bij array
+        ii = i-1
+
+        #populate bij parameter array
+        for j in range(sim_lng-1):
+            #different calculation on diagonal
+            if ii == j:
+                bij[ii,j] = 2.*(yi[ii]+a0-2.*yij[0,ii]) 
+            else:
+                bij[ii,j] = 2.*(yij[ii,j]+a0-yij[0,ii]-yij[0,j]) 
+
+        #compute Q matrix 
+        Q[ii,:] = simplex[i,:]-simplex[0,:]
+
+    #The covarience maxtrix
+    covar = Q.dot(np.linalg.inv(bij).dot(Q.T))
+
+    return covar
+    
