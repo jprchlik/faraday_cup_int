@@ -31,7 +31,8 @@ def convert_e_to_kms(eng):
 
 def fmt_wind_spec(date,spec_dir='test_obs/test_wind_spectra/',parm_dir=None,
                   spec_fmt = 'wi_sw-ion-dist_swe-faraday_{0:%Y%m%d}_v01.cdf',
-                  parm_fmt = 'wi_h1_swe_{0:%Y%m%d}_v01.cdf'):
+                  parm_fmt = 'wi_h1_swe_{0:%Y%m%d}_v01.cdf',unc_floor=1.0,
+                  unc_frac=0.04):
 
     """
     Reads Wind/SWE cdf files and formats the for use in reconstruction of 
@@ -54,6 +55,11 @@ def fmt_wind_spec(date,spec_dir='test_obs/test_wind_spectra/',parm_dir=None,
     parm_fmt: str, optional
         A formatted string containing the file name format of the parameters derived from 
         the spectra (Default = 'wi_h1_swe_{0:%Y%m%d}_v01.cdf').
+    unc_floor: float, optional
+        The minimum uncertainty in a measurement from the faraday cup in picoamps (Default 
+        = 1.0). 
+    unc_frac: float, optional 
+        The fractional uncertainty in each measurement (Default = 0.04). 
 
     Returns
     -------
@@ -169,6 +175,8 @@ def fmt_wind_spec(date,spec_dir='test_obs/test_wind_spectra/',parm_dir=None,
         cup_incl = wind_spec['inclination_angle'][...][fc-1]+np.zeros(cup_azim.shape[1])
         cup_eprq = wind_spec[cup+'_EperQ'][...]
         cup_edel = wind_spec[cup+'_EperQ_DEL'][...]
+
+        #convert FC energies to km/s assuming a proton
         cup_vkms = convert_e_to_kms(cup_eprq) 
         cup_dkms = convert_e_to_kms(cup_eprq+cup_edel)-cup_vkms 
 
@@ -187,6 +195,7 @@ def fmt_wind_spec(date,spec_dir='test_obs/test_wind_spectra/',parm_dir=None,
             #fc_bf = np.abs(np.degrees(np.arccos(np.dot([0.,0.,-1.],pls_fc/v_mag))))
             #get angle onto the cup
             fc_bf = np.degrees(np.arctan2(np.sqrt(pls_fc[1]**2 + pls_fc[0]**2),-pls_fc[2]))
+
         
             #########################################
             #Set up observering condidtions before making any VDFs
@@ -201,11 +210,14 @@ def fmt_wind_spec(date,spec_dir='test_obs/test_wind_spectra/',parm_dir=None,
             #only include reasonable effective area values in calculations
             if fc_bf >= 59:
                 waeff = np.inf
-            
+
+            #elementary charge
             q0    = 1.6021892e-7 # picocoulombs
+
             #velocity grid is static for each epoch
-            grid_v= cup_vkms[spec_ind]
-            dv    = cup_dkms[spec_ind]
+            #remove the last two elements in width because the are not "real" measurements
+            grid_v= cup_vkms[spec_ind][0,:-2]
+            dv    = cup_dkms[spec_ind][0,:-2]
             cont  = 1.e12/(waeff*q0*dv*grid_v)
         
         
@@ -213,8 +225,11 @@ def fmt_wind_spec(date,spec_dir='test_obs/test_wind_spectra/',parm_dir=None,
             #Create array to populate with measurement geometry and range
             x_meas = np.zeros((7,grid_v.size),dtype=np.double)
         
-            #current in Amps
-            rea_cur = cup_flux[spec_ind,j,:]*1E-12 
+            #current in Amps (Remove last 2 elements)
+            rea_cur = cup_flux[spec_ind,j,:-2]*1E-12 
+
+            #uncertainty in the error model in Amps
+            rea_unc = np.sqrt((cup_flux[spec_ind,j,:-2]*unc_frac)**2+unc_floor**2)*1E-12
             
             #Populate measesurement values
             x_meas[0,:] = grid_v #speed bins
@@ -251,6 +266,10 @@ def fmt_wind_spec(date,spec_dir='test_obs/test_wind_spectra/',parm_dir=None,
             fcs[key]['cont']    = cont.ravel() #Make 1D array
             #Add initial guess based on measured Wind parameters
             fcs[key]['init_guess'] = mdv.arb_p_response(fcs[key]['x_meas'],vdf_inpt,samp,sc='wind')
+
+            #Add uncertainty if error model is greater than 0
+            if ((unc_floor > 0.) | (unc_frac > 0.)):
+                fcs[key]['unc'] = rea_unc.ravel()
 
 
     return fcs,vdf_inpt
