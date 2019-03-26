@@ -1085,6 +1085,10 @@ def gennorm_2d_reconstruct(z,fcs,cur_vdf,add_ring=False,nproc=8,samp=15.):
         The measured current of all Faraday Cups
     """
 
+    #Automatically set ring parameter if z is 15 elements long
+    if len(z) == 15:
+        add_ring = True
+
     #parameters to adjust in model if there is a ring and a core
     if add_ring:
         vx,vy,vz,wper, wpar, den,sper,spar,q_r,p_r,wper_r,wpar_r,peak_r,sper_r,spar_r = z
@@ -1166,7 +1170,7 @@ def gennorm_2d_reconstruct(z,fcs,cur_vdf,add_ring=False,nproc=8,samp=15.):
     return fcs_err
 
 
-def cal_covar_nm(simplex,func,mag_par):
+def cal_covar_nm(simplex,func,args):
     """
     Calculates the uncertainties in the Nelder-Mead optimazation solution.
 
@@ -1180,10 +1184,8 @@ def cal_covar_nm(simplex,func,mag_par):
     func: function
         The function used in the minimization processs.
 
-    mag_par: np.array
-        A numpy array of the magnetic field normal in the following order : bx, by, and bz.
-        The normal vectors should be defined in GSE coordinates.
-
+    args: tuple
+        Arguments to pass to the function used in reconstruction
 
     Returns
     -------
@@ -1191,8 +1193,11 @@ def cal_covar_nm(simplex,func,mag_par):
         A NxN covarience matrix, where N is the number of paramters in the fit model.
     """
 
+    #create temp arg varible
+    #Add simplex to fit
+    targ = (simplex[0,:],)+args
     #a0 simplex coefficient Value of the function at the first simplex point
-    a0 = func(simplex[0,:],mag_par)
+    a0 = func(*targ)
 
     #simplex long axis
     sim_lng = simplex[:,0].size
@@ -1215,11 +1220,11 @@ def cal_covar_nm(simplex,func,mag_par):
     #populate simplex array values 
     for i in range(sim_lng):
         #populate yi along simplex points
-        yi[i] = func(simplex[i,:],mag_par)
+        yi[i] = func(simplex[i,:],*args)
    
         #populate yij for midpoints
         for j in range(sim_lng):
-            yij[i,j] = func(((simplex[i,:]+simplex[j,:])/2.),mag_par)
+            yij[i,j] = func(((simplex[i,:]+simplex[j,:])/2.),*args)
 
         #skip calculation of coefficients if it is the zeroth simplex array
         if i == 0:
@@ -1235,9 +1240,9 @@ def cal_covar_nm(simplex,func,mag_par):
         for j in range(sim_lng-1):
             #different calculation on diagonal
             if ii == j:
-                bij[ii,j] = 2.*(yi[ii]+a0-2.*yij[0,ii]) 
+                bij[ii,j] = 2.*(yi[i]+a0-2.*yij[0,i]) 
             else:
-                bij[ii,j] = 2.*(yij[ii,j]+a0-yij[0,ii]-yij[0,j]) 
+                bij[ii,j] = 2.*(yij[i,j]+a0-yij[0,i]-yij[0,j]) 
 
         #compute Q matrix 
         Q[ii,:] = simplex[i,:]-simplex[0,:]
