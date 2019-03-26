@@ -36,13 +36,20 @@ Example
 Here I will briefly describe the process for reconstructiong the 2D velocity distribution from a sampling of 1D FC velocity observations at different look angles.
 First, you will need to import the modules needed to successfully call the code. Most of which are the modules created in this code.
 
+First, you need to import the modules required to reconstruct the solar wind observations.
+
 .. code-block:: python
 
     import make_discrete_vdf as mdv
     import read_fmt_obs as rfo
     import multi_fc_functions as mff
     from scipy import optimize
+    import numpy as np
+    import time
 
+
+Next, specify a time period you are interented in reconstructing. 
+This time period needs to be in a format recognizable by the pd.to_datetime() function.
 
 .. code-block:: python
 
@@ -50,31 +57,53 @@ First, you will need to import the modules needed to successfully call the code.
     date = '2019/02/09 00:10:00'
 
 
+Once you select the time period you are interested in,
+call the module that formats observations into something that can be read by the reconstruction code suite.
+Here we will try to reconstruct a set of Wind observations.
+
 .. code-block:: python
 
     #Read in Wind spectra and parameters and format them in a way that can be used by the reconstruction program
-    fcs,vdf_inpt = rfo.fmt_wind_spec(date)
+    fcs,vdf_inpt = rfo.fmt_wind_spec(date,spec_dir='test_obs/test_wind_spectra/',parm_dir='test_obs/test_wind_spectra/')
 
+
+Now that we have the Wind observations in a nice format,
+let us go ahead and plot the observations and the single bi-maxwellian fit.
 
 .. code-block:: python
 
     #Plot the Observations of all Wind FCs and the Velocity distribution if the bi-maxwellian solution 
     #Derived by Wind for each FC
-    mff.create_fc_grid_plot(fcs)
+    mff.create_fc_grid_plot(fcs,log_plot=True,ylim=[1e-4,1e-1])
+
+.. image:: _static/fc_measurements_before_model.png
+   :alt: FC Obs. Plot
+   :align: center
+   :scale: 60%
+
+It is apparent that the bi-maxwellian leaves something to be desired,
+so let us try a different model of the solar wind.
+Specifically, let us use a Generalized Normal Distribution with a secondary peak.
 
 .. code-block:: python
 
-    #Trying a guess based on a previous failed try at fitting_wind_observation
+    #Trying a guess based on a previous failed try at fitting a Wind observation
     human_guess = [ -4.35047381e+02,  -1.35264270e+01,   7.15811005e+00,   2.51430881e+01,
                      2.70190565e+01,   2.06592978e-02,   2.81259051e+00,   2.16901722e+00,
                      3.84810371e+01,   1.06937488e+01,   4.40914378e+01,   4.85236340e+01,
                      6.79767052e-03,   1.60664033e+00,   1.78231253e+00,]                
 
 
+The first three parameters are the 
+
 .. code-block:: python
 
     #Previous observation was at a different time so adjust velocity solution
     human_guess[:3] = vdf_inpt['u_gse']
+    #Get magnetic fields from Wind CDF file that is stored in the vdf dictionary
+    b_gse = vdf_inpt['b_gse']
+    #Set the size of the VDF solution
+    vel_clip = 200. #km/s
 
 
 .. code-block:: python
@@ -85,6 +114,15 @@ First, you will need to import the modules needed to successfully call the code.
                                                       add_ring=human_guess[8:])
     #Plot what the velocity distribution looks like
     mdv.plot_vdf(dis_vdf_human)
+
+.. image:: _static/fc_p_distribution_init_guess.png
+   :alt: FC Obs. Plot
+   :align: center
+   :scale: 100%
+
+
+.. code-block:: python
+
     #measure the velocity distribution for each FC based on the input parameters
     samp = 15.
     for k,i in enumerate(fcs.keys()):
@@ -92,12 +130,14 @@ First, you will need to import the modules needed to successfully call the code.
         #updated using dynamic sampling 2018/10/12 J. Prchlik
         fcs[i]['dis_cur'] = mdv.arb_p_response(fcs[i]['x_meas'],dis_vdf_human,samp)
     
-    mff.create_fc_grid_plot(fcs)
+    #Plot the measurements with the initial guess overplotted
+    mff.create_fc_grid_plot(fcs,log_plot=True,ylim=[1e-4,1e-1])
 
-.. image:: _static/fc_measurements_before_model.png
+.. image:: _static/fc_measurements_init_guess.png
    :alt: FC Obs. Plot
    :align: center
    :scale: 60%
+
 
 .. code-block:: python
 
@@ -111,9 +151,19 @@ First, you will need to import the modules needed to successfully call the code.
                                 options={'xtol':1e-2,'ftol':1e-2,'disp':True,'maxiter':max_try,'maxfev':max_try})
     x2 = time.time()
 
+Optimization terminated successfully.
+Current function value: 0.009594
+Iterations: 3610
+Function evaluations: 4737
+
 .. code-block:: python
+
     #Total run time until convergence
     print('Total Run Time {0:7.1f} min'.format((x2-x1)/60.))
+
+
+Total Run Time   652.0 min
+
 
 .. code-block:: python
 
@@ -139,8 +189,8 @@ First, you will need to import the modules needed to successfully call the code.
 
 .. code-block:: python
 
-    #Visually compare the best fit velocity solution (Best MC), the bi-maxwell (Init. Guess), and the observations (Input)
-    mff.create_fc_grid_plot(fcs)
+    #Visually compare the best fit velocity solution (Best Mod.), the bi-maxwellian (Init. Guess), and the observations (Input)
+    mff.create_fc_grid_plot(fcs,log_plot=True,ylim=[1e-4,1e-1])
 
 
 .. image:: _static/fc_measurements.png
