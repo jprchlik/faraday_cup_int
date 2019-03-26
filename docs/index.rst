@@ -94,7 +94,9 @@ Specifically, let us use a Generalized Normal Distribution with a secondary peak
                      6.79767052e-03,   1.60664033e+00,   1.78231253e+00,]                
 
 
-The first three parameters are the 
+The first three parameters are the Vx, Vy, and Vz parameters, so 
+in this example I took a previous parameter guess and updated the velocity
+components because we have the data for it.
 
 .. code-block:: python
 
@@ -105,6 +107,10 @@ The first three parameters are the
     #Set the size of the VDF solution
     vel_clip = 200. #km/s
 
+Now that we have an initial guess of parameters, 
+we can build a theoretical proton velocity distribution 
+in the V:sub:`parallel`\ and V:sub:`perpendicular`\ reference
+frames.
 
 .. code-block:: python
 
@@ -120,6 +126,8 @@ The first three parameters are the
    :align: center
    :scale: 100%
 
+
+Then we can "measure" the theortical velocity distribution and compare it with the FC measurements.
 
 .. code-block:: python
 
@@ -138,6 +146,7 @@ The first three parameters are the
    :align: center
    :scale: 60%
 
+Trying the match the 
 
 .. code-block:: python
 
