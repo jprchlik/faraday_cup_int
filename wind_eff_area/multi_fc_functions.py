@@ -1170,7 +1170,7 @@ def gennorm_2d_reconstruct(z,fcs,cur_vdf,add_ring=False,nproc=8,samp=15.):
     return fcs_err
 
 
-def cal_covar_nm(simplex,func,args):
+def cal_covar_nm(simplex,func,args,return_all=False):
     """
     Calculates the uncertainties in the Nelder-Mead optimazation solution.
 
@@ -1186,11 +1186,15 @@ def cal_covar_nm(simplex,func,args):
 
     args: tuple
         Arguments to pass to the function used in reconstruction
+    
+    return_all: boolean
+        Return all calculate properties using the simplex matrix
 
     Returns
     -------
     covar: np.array
         A NxN covarience matrix, where N is the number of paramters in the fit model.
+    
     """
 
     #create temp arg varible
@@ -1235,7 +1239,7 @@ def cal_covar_nm(simplex,func,args):
     #get offset for smaller bij array
     for i in range(sim_lng-1):
         #populate ai parameter array
-        ai[i-1] = 2.*yij[0,i]-(yi[i]+3*a0)/2.
+        ai[i] = 2.*yij[0,i]-(yi[i]+3*a0)/2.
         #add offset for y to b parameters
         ii = i+1
         #populate bij parameter array
@@ -1243,7 +1247,7 @@ def cal_covar_nm(simplex,func,args):
             #add offset for y to b parameters
             jj = j+1
             #different calculation on diagonal
-            if ii == j:
+            if i == j:
                 bij[i,j] = 2.*(yi[ii]+a0-2.*yij[0,ii]) 
             else:
                 bij[i,j] = 2.*(yij[ii,jj]+a0-yij[0,ii]-yij[0,jj]) 
@@ -1254,5 +1258,8 @@ def cal_covar_nm(simplex,func,args):
     #The covarience maxtrix
     covar = Q.dot(np.linalg.inv(bij).dot(Q.T))
 
-    return covar
+    if return_all:
+        return covar,yi,yij,a0,ai,bij,Q
+    else:
+        return covar
     
