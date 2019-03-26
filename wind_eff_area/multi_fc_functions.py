@@ -1155,8 +1155,8 @@ def gennorm_2d_reconstruct(z,fcs,cur_vdf,add_ring=False,nproc=8,samp=15.):
         for j,i in enumerate(index):
             tot_err[j] = np.sum((dis_cur[j,:] - fcs[i]['rea_cur'])**2/(fcs[i]['unc']**2))
 
-        #Get total X^2 per FC per DoF
-        fcs_err = np.sum(tot_err)/len(z)/index.size
+        #Get total X^2 per FC per DoF Each measurement for each FC
+        fcs_err = np.sum(tot_err)/(index.size*fcs[i]['unc'].size-len(z))
 
     else:
         #Get error in each faraday cup
@@ -1230,22 +1230,26 @@ def cal_covar_nm(simplex,func,args):
         if i == 0:
             continue
 
+  
+
+    #get offset for smaller bij array
+    for i in range(sim_lng-1):
         #populate ai parameter array
         ai[i-1] = 2.*yij[0,i]-(yi[i]+3*a0)/2.
-  
-        #get off set for smaller bij array
-        ii = i-1
-
+        #add offset for y to b parameters
+        ii = i+1
         #populate bij parameter array
         for j in range(sim_lng-1):
+            #add offset for y to b parameters
+            jj = j+1
             #different calculation on diagonal
             if ii == j:
-                bij[ii,j] = 2.*(yi[i]+a0-2.*yij[0,i]) 
+                bij[i,j] = 2.*(yi[ii]+a0-2.*yij[0,ii]) 
             else:
-                bij[ii,j] = 2.*(yij[i,j]+a0-yij[0,i]-yij[0,j]) 
+                bij[i,j] = 2.*(yij[ii,jj]+a0-yij[0,ii]-yij[0,jj]) 
 
         #compute Q matrix 
-        Q[ii,:] = simplex[i,:]-simplex[0,:]
+        Q[i,:] = simplex[ii,:]-simplex[0,:]
 
     #The covarience maxtrix
     covar = Q.dot(np.linalg.inv(bij).dot(Q.T))
