@@ -12,8 +12,8 @@ def convert_e_to_kms(eng):
     Converts energy bin measurements to velocity measurements in km/s by assuming the 
     incoming particles are protons.
 
-    Paramters
-    ---------
+    Parameters
+    ----------
     eng: float or np.array
         The energy of an FC bin in eV       
 
@@ -39,8 +39,9 @@ def fmt_wind_spec(date,spec_dir='test_obs/test_wind_spectra/',parm_dir=None,
     the velocity distribution.
 
 
-    Parameters:
-    -----------
+    Parameters
+    ----------
+
     date: str
         The date of the observation you are interested in. This date string 
         must be able to be read by pd.to_datetime().
