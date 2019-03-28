@@ -1108,7 +1108,7 @@ def gennorm_2d_reconstruct(z,fcs,cur_vdf,add_ring=False,nproc=8,samp=15.):
     #Add ring to fit
     if add_ring:
         #Switched to generalized normal distribution 2019/02/07 J. Prchlik see https://docs.scipy.org/doc/scipy-0.16.1/reference/generated/scipy.stats.gennorm.html
-        dis_vdf = mdv.make_discrete_gennorm_vdf(pls_par,cur_vdf['b_gse'],pres=pres,qres=qres,clip=vel_clip,add_ring=[q_r,p_r,wper_r,wpar_r,peak_r,sper_r,spar_r]) 
+        dis_vdf = mdv.make_discrete_gennorm_vdf(z,cur_vdf['b_gse'],pres=pres,qres=qres,clip=vel_clip) 
     else:
         #Create new VDF guess based on input parameters
         #Switched to generalized normal distribution 2019/02/07 J. Prchlik see https://docs.scipy.org/doc/scipy-0.16.1/reference/generated/scipy.stats.gennorm.html
@@ -1157,6 +1157,13 @@ def gennorm_2d_reconstruct(z,fcs,cur_vdf,add_ring=False,nproc=8,samp=15.):
 
         #Get total X^2 per FC per DoF Each measurement for each FC
         fcs_err = np.sum(tot_err)/(index.size*fcs[i]['unc'].size-len(z))
+        #check to make sure fcs_err is finite
+        #if not make the error equal to the measurement 2019/03/27 J. Prchlik
+        if not np.isfinite(fcs_err):
+             fcs_err = 0
+             #Add measurement squared for each FC
+             for i in index:
+                 fcs_err =+ np.sum(fcs[i]['rea_cur']**2)
 
     else:
         #Get error in each faraday cup
@@ -1170,16 +1177,16 @@ def gennorm_2d_reconstruct(z,fcs,cur_vdf,add_ring=False,nproc=8,samp=15.):
     return fcs_err
 
 
-def cal_covar_nm(simplex,func,args,return_all=False):
+def cal_covar_nm(final_simplex,func,args,return_all=False):
     """
     Calculates the uncertainties in the Nelder-Mead optimazation solution.
 
     Parameters
     ----------
-    simplex: np.array
-        The simplex array from a scipy.optimize fit. The array will have (N+1,N) parameters,
-        where N is the number of parameters in the fit. For more details on the uncertainty 
-        calculation see the Appendix A of Nelder and Mead (1965).
+    final_simplex: tuple
+        The 2 array simplex tuple from a scipy.optimize fit. The first array will have (N+1,N) parameters,
+        where N is the number of parameters in the fit. The second array is the function value at each set 
+        of parameters For more details on the uncertainty calculation see the Appendix A of Nelder and Mead (1965).
 
     func: function
         The function used in the minimization processs.
@@ -1197,17 +1204,21 @@ def cal_covar_nm(simplex,func,args,return_all=False):
     
     """
 
+    #break up simplex tuple into parameter values and solutions to the equation
+    simplex, simplex_sol = final_simplex
+
     #create temp arg varible
     #Add simplex to fit
-    targ = (simplex[0,:],)+args
+    #targ = (simplex[0][0,:],)+args
     #a0 simplex coefficient Value of the function at the first simplex point
-    a0 = func(*targ)
+    a0 = simplex_sol[0]
 
     #simplex long axis
     sim_lng = simplex[:,0].size
 
     #Functional result of values at the simplex points. The array size is N+1
-    yi = np.zeros(sim_lng)
+    #yi = np.zeros(sim_lng)
+    yi = simplex_sol
 
     #Functional result of the midpoint simplex points. The array size is (N+1)x(N+1)
     yij = np.zeros((sim_lng,sim_lng))
@@ -1224,24 +1235,23 @@ def cal_covar_nm(simplex,func,args,return_all=False):
     #populate simplex array values 
     for i in range(sim_lng):
         #populate yi along simplex points
-        yi[i] = func(simplex[i,:],*args)
-   
+        #Already returned by final_simplex in optimizatize so do no recal.
+        #yi[i] = func(simplex[i,:],*args)
         #populate yij for midpoints
-        for j in range(sim_lng):
+        #can cut down on computations by using matrix symmetry
+        #(i.e. yij equals yji)
+        for j in range(i):
             yij[i,j] = func(((simplex[i,:]+simplex[j,:])/2.),*args)
-
-        #skip calculation of coefficients if it is the zeroth simplex array
-        if i == 0:
-            continue
-
-  
+            #exploit symmetry to cut computations by half
+            yij[j,i] = yij[i,j]
 
     #get offset for smaller bij array
     for i in range(sim_lng-1):
-        #populate ai parameter array
-        ai[i] = 2.*yij[0,i]-(yi[i]+3*a0)/2.
         #add offset for y to b parameters
         ii = i+1
+        #populate ai parameter array
+        ai[i] = 2.*yij[0,ii]-(yi[ii]+3*a0)/2.
+
         #populate bij parameter array
         for j in range(sim_lng-1):
             #add offset for y to b parameters
