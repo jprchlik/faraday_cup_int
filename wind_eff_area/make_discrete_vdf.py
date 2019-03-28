@@ -224,9 +224,8 @@ def make_discrete_gennorm_vdf(pls_par,mag_par,pres=0.5,qres=0.5,clip=300.,add_ri
     sper  = pls_par[6]
     spar  = pls_par[7]
 
-
     #Automatically add ring if plasma parameter is longer than 8 elements long 2019/03/25 J. Prchlik
-    if len(pls_par) >= 8:
+    if len(pls_par) > 8:
         add_ring = pls_par[8:]
 
 
