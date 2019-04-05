@@ -155,6 +155,7 @@ we may vary those parameters until we find a best fit solution.
 To find the best fit solution we use the Nelder-Mead algorithm to minimize the X:superscript:`2`\ for each measurement.
 Briefly, the Nelder-Mead algorithm uses a series of simplices (i.e. triangles) to find the solution that minimizes X:superscript:`2`\ .
 For this examples we added a secondary generalized normal distribution to improve the final fit.
+
 .. code-block:: python
 
     #maximum tries
