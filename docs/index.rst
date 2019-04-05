@@ -83,7 +83,7 @@ let us go ahead and plot the observations and the single bi-maxwellian fit.
 
 It is apparent that the bi-maxwellian leaves something to be desired,
 so let us try a different model of the solar wind.
-Specifically, let us use a Generalized Normal Distribution with a secondary peak.
+Specifically, let us use a `Generalized Normal Distribution <https://www.tandfonline.com/doi/abs/10.1080/02664760500079464>`_ with a secondary peak.
 
 .. code-block:: python
 
@@ -109,7 +109,7 @@ components because we have the data for it.
 
 Now that we have an initial guess of parameters, 
 we can build a theoretical proton velocity distribution 
-in the V:sub:`parallel`\ and V:sub:`perpendicular`\ reference
+in the V:subscript:`parallel`\ and V:subscript:`perpendicular`\ reference
 frames.
 
 .. code-block:: python
@@ -127,7 +127,7 @@ frames.
    :scale: 100%
 
 
-Then we can "measure" the theortical velocity distribution and compare it with the FC measurements.
+Then we can "measure" the theoretical velocity distribution and compare it with the FC measurements.
 
 .. code-block:: python
 
@@ -146,13 +146,22 @@ Then we can "measure" the theortical velocity distribution and compare it with t
    :align: center
    :scale: 60%
 
-Trying the match the 
-
+We can see our initial guess of the velocity distribution is not very good. 
+That is the spectrum generated from the theoretical FC response to the incomming plasma velocity distribution (black) does not match the observed proton distributions (blue). 
+If we can get the measured and generated velocity distribution to match for all FC measurements, 
+then we may be able to understand the structure of the incomiing velocity distribution.
+Since we initially assumed the velocity distribution may be modelled by a generalized normal distribution,
+we may vary those parameters until we find a best fit solution.
+To find the best fit solution we use the Nelder-Mead algorithm to minimize the X:superscript:`2`\ for each measurement.
+Briefly, the Nelder-Mead algorithm uses a series of simplices (i.e. triangles) to find the solution that minimizes X:superscript:`2`\ .
+For this examples we added a secondary generalized normal distribution to improve the final fit.
 .. code-block:: python
 
     #maximum tries
     max_try = 2200*3 #about 12 hours
     #Notice NM can converge better than Powell with complex solutions, so trying it now
+    #Nelder-Mead is superior algorithm to the Powell Method, so for now I recommend using
+    #the Nelder-Mead algorithm 
     x1 = time.time()
     #Try to minimize the sum squared errors for all FC to fit the best fit
     #True means include ring in final fit
