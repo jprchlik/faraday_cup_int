@@ -254,7 +254,7 @@ def make_discrete_gennorm_vdf(pls_par,mag_par,pres=0.5,qres=0.5,clip=300.,add_ri
     
     #compute the raw vdf (ftos comes from transformation from FWHM to 2Sigma)
     #rawvdf = a*np.exp(- (pgrid/wpar)**2. - (qgrid/wper)**2.)
-    #Factor of 2 comes from defintion of pgrid which is only positive and p=0 is the origin
+    #Factor of 2 comes from definition of qgrid which is only positive and p=0 is the origin
     rawvdf = a*2.*gennorm.pdf(pgrid,spar,scale=np.sqrt(2.)*wpar)*gennorm.pdf(qgrid,sper,scale=np.sqrt(2.)*wper)
 
     #Add ring to fit
