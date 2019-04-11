@@ -117,9 +117,11 @@ frames.
     #Show what the initial guess assuming at generalized normal distribution
     #looks like compared to the measurements and the bi-maxellian fit and Observations
     dis_vdf_human = mdv.make_discrete_gennorm_vdf(human_guess,b_gse,pres=1.00,qres=1.00,clip=vel_clip,
-                                                      add_ring=human_guess[8:])
+                                                  add_ring=human_guess[8:])
     #Plot what the velocity distribution looks like
     mdv.plot_vdf(dis_vdf_human)
+
+
 
 .. image:: _static/fc_p_distribution_init_guess.png
    :alt: FC Obs. Plot
@@ -167,13 +169,13 @@ For this examples we added a secondary generalized normal distribution to improv
     #Try to minimize the sum squared errors for all FC to fit the best fit
     #True means include ring in final fit
     nm_human = optimize.minimize(mff.gennorm_2d_reconstruct,human_guess, args=(fcs,dis_vdf_human,True),method='Nelder-Mead',
-                                options={'xtol':1e-2,'ftol':1e-2,'disp':True,'maxiter':max_try,'maxfev':max_try})
+                                options={'xtol':1e-1,'ftol':1e-1,'disp':True,'maxiter':max_try,'maxfev':max_try})
     x2 = time.time()
 
 Optimization terminated successfully.
-Current function value: 0.009594
-Iterations: 3610
-Function evaluations: 4737
+Current function value: 5.422494
+Iterations: 2214
+Function evaluations: 2934
 
 .. code-block:: python
 
@@ -181,8 +183,10 @@ Function evaluations: 4737
     print('Total Run Time {0:7.1f} min'.format((x2-x1)/60.))
 
 
-Total Run Time   652.0 min
+Total Run Time   375.6 min
 
+
+Now add the best fit solution for each FC to the corresponding 'dis_cur' key for each dictionary object and plot the 2D velocity distribution.
 
 .. code-block:: python
 
@@ -205,6 +209,7 @@ Total Run Time   652.0 min
    :scale: 100%
 
 
+Next, plot what the modelled velocity distribution would look like to the FCs (solid, black) and compare it visually to the FC measurements (blue, dashed) and the bi-maxwellian solution (purple, dotted). 
 
 .. code-block:: python
 
@@ -216,6 +221,37 @@ Total Run Time   652.0 min
    :alt: FC Obs. Plot
    :align: center
    :scale: 60%
+
+
+Finally, we may estimate the uncertainty in each fitting parameter by using the simplex method outlined in Nelder and Mead (1965).
+Note this will take some time because the program needs to calculate new values at simplex points on a grid, so I broke it down to a sub sample of observations.
+
+.. code-block:: python
+
+    #get a sub-sample of FC to test the uncertainty value
+    fc_test = {}
+    fc_list = ['fc_10','fc_32']
+    for j,i in enumerate(fc_list):
+        fc_test['fc_{0:1d}'.format(j)] = fcs[i]
+
+
+    #calculate the covariance matrix
+    covar = mff.cal_covar_nm(nm_human.final_simplex,mff.gennorm_2d_reconstruct,(fc_test,dis_vdf_human,True),return_all=False)
+
+
+And convert the covarience matrix into a percent uncertainty for each parameter.
+
+.. code-block:: python
+
+    #Uncertainties assuming non-correlated errors
+    #total unceratinty for each parameter as a percent
+    print(100.*np.sqrt(2.*(nm_human.final_simplex[1][0])**2*np.diag(np.abs(covar)))/np.abs(nm_human.x))
+
+
+[ 0.01931854  0.86215472  2.21693913  0.66579313  0.55633987  0.52998703
+1.01127704  1.32661807  0.93936466  0.55195308  2.69801755  4.01133724
+3.60696195  1.78138854  1.34935791]
+
 
 Indices and tables
 ==================
