@@ -1263,11 +1263,16 @@ def cal_covar_nm(final_simplex,func,args,return_all=False):
                 bij[i,j] = 2.*(yij[ii,jj]+a0-yij[0,ii]-yij[0,jj]) 
 
         #compute Q matrix 
-        Q[i,:] = simplex[ii,:]-simplex[0,:]
+        #Note from Nelder and Mead 1965 the ith column
+        #contains the parameters in order for Pi (i.e. the paramters
+        #values for simplex point i)
+        Q[:,i] = simplex[ii,:]-simplex[0,:]
 
     #The covarience maxtrix
     covar = Q.dot(np.linalg.inv(bij).dot(Q.T))
 
+    #if return_all is set then return all parameter values
+    #if not just return the covariance matrix
     if return_all:
         return covar,yi,yij,a0,ai,bij,Q
     else:
