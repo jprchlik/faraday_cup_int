@@ -239,18 +239,35 @@ Note this will take some time because the program needs to calculate new values 
     covar = mff.cal_covar_nm(nm_human.final_simplex,mff.gennorm_2d_reconstruct,(fc_test,dis_vdf_human,True),return_all=False)
 
 
-And convert the covarience matrix into a percent uncertainty for each parameter.
+Now you may convert the covariance matrix into a uncertainty for each parameter.
 
 .. code-block:: python
 
-    #Uncertainties assuming non-correlated errors
-    #total unceratinty for each parameter as a percent
-    print(100.*np.sqrt(2.*(nm_human.final_simplex[1][0])**2*np.diag(np.abs(covar)))/np.abs(nm_human.x))
+    par_unc = mdv.print_formatted_unc(nm_human.final_simplex,covar)
 
 
-[ 0.01931854  0.86215472  2.21693913  0.66579313  0.55633987  0.52998703
-1.01127704  1.32661807  0.93936466  0.55195308  2.69801755  4.01133724
-3.60696195  1.78138854  1.34935791]
+=========     ============   ===========    ============== ===================================================================================================================
+Parameter     Value          Uncertainty    Unit           Note                                                                            
+---------     ------------   -----------    -------------- -------------------------------------------------------------------------------------------------------------------
+Vx             -4.806e+02      9.284e-02     km/s           The x-component velocity of the solar wind core in GSE coordinates              
+Vy             -2.909e+01      2.508e-01     km/s           The y-component velocity of the solar wind core in GSE coordinates              
+Vz              1.504e+01      3.334e-01     km/s           The z-component velocity of the solar wind core in GSE coordinates              
+wper            1.593e+01      1.060e-01     km/s           The width of the velocity distribution perpendicular to the magnetic field      
+wpar            3.342e+01      1.859e-01     km/s           The width of the velocity distribution parallel to the magnetic field           
+n               3.465e-02      1.836e-04     #/cm^3/(km/s)  The peak value of the velocity distribution in the core                         
+sper            1.199e+00      1.213e-02     None           A parameter describing the shape of the velocity distribution of the core in the perpendicular direction
+spar            1.897e+00      2.517e-02     None           A parameter describing the shape of the velocity distribution of the core in the parallel direction
+q_r             5.427e+01      5.097e-01     km/s           The location of a secondary proton distribution in the perpendicular coordinate system
+p_r             1.781e+01      9.832e-02     km/s           The location of a secondary proton distribution in the parallel coordinate system
+wper_r          1.272e+01      3.431e-01     km/s           The width of the velocity distribution perpendicular to the magnetic field in the secondary peak
+wpar_r          1.419e+01      5.691e-01     km/s           The width of the velocity distribution parallel to the magnetic field in the secondary peak
+peak_r          2.841e-03      1.025e-04     #/cm^3/(km/s)  The peak value of the secondary proton distribution                             
+sper_r          1.004e+00      1.788e-02     None           A parameter describing the shape of the velocity distribution of the secondary peak in the perpendicular direction
+spar_r          7.467e-01      1.008e-02     None           A parameter describing the shape of the velocity distribution of the secondary peak in the parallel direction
+=========     ============   ===========    ============== ===================================================================================================================
+
+
+
 
 
 Indices and tables
