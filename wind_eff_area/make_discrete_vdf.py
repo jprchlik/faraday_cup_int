@@ -9,6 +9,68 @@ from scipy.stats import gennorm
 import time
 
 
+def print_formatted_unc(simplex,covar):
+    """
+    Prints formatted parameter values and uncertainty for the best fit model.
+
+    Parameters
+    ----------
+    final_simplex: tuple
+        The 2 array simplex tuple from a scipy.optimize fit. The first array will have (N+1,N) parameters,
+        where N is the number of parameters in the fit. The second array is the function value at each set 
+        of parameters For more details on the uncertainty calculation see the Appendix A of Nelder and Mead (1965).
+    covar: np.array
+        A NxN covarience matrix, where N is the number of paramters in the fit model.
+    
+    
+    Returns
+    -------
+    unc_val: np.array
+        The uncertainty for each parameter in the model in the same units as the respective parameter.
+
+    """
+
+
+    #get number of parameters in fit
+    nparm = covar.shape[0]
+
+
+    #parameter values of best fit
+    par_val = simplex[0][0]
+
+    #Chi^2 value of best fit value
+    chi_cal = simplex[1][0]
+
+    #uncertainty value for each parameter
+    unc_val = np.sqrt(2.*(chi_cal)**2*np.diag(np.abs(covar)))
+
+    #Set up variables to loop over solution
+    parms = ["#parameter","Vx","Vy","Vz","wper","wpar","n","sper","spar","q_r","p_r","wper_r","wpar_r","peak_r","sper_r","spar_r"]
+    value = ["{0:10.3e}"]*len(parms)
+    value[0] = "Value"
+    uncer = ["{0:10.3e}"]*len(parms)
+    uncer[0] = "Uncertainty"
+    units = ["Unit","km/s","km/s","km/s","km/s","km/s","#/cm^3/(km/s)","None","None","km/s","km/s","km/s","km/s","#/cm^3/(km/s)","None","None"]
+    #create variable notes
+    notes = [ "Note","The x-component velocity of the solar wind core in GSE coordinates","The y-component velocity of the solar wind core in GSE coordinates","The z-component velocity of the solar wind core in GSE coordinates","The width of the velocity distribution perpendicular to the magnetic field","The width of the velocity distribution parallel to the magnetic field","The peak value of the velocity distribution in the core","A parameter describing the shape of the velocity distribution of the core in the perpendicular direction","A parameter describing the shape of the velocity distribution of the core in the parallel direction","The location of a secondary proton distribution in the perpendicular coordinate system","The location of a secondary proton distribution in the parallel coordinate system","The width of the velocity distribution perpendicular to the magnetic field in the secondary peak","The width of the velocity distribution parallel to the magnetic field in the secondary peak","The peak value of the secondary proton distribution","A parameter describing the shape of the velocity distribution of the secondary peak in the perpendicular direction","A parameter describing the shape of the velocity distribution of the secondary peak in the parallel direction"]
+
+
+    #loop over all parameters and print
+    for i in range(nparm+1):
+        #skip header for formatting print
+        if i > 0:
+            value[i] = value[i].format(par_val[i-1])
+            uncer[i] = uncer[i].format(unc_val[i-1])
+        
+        print("{0:<15}{1:<15}{2:<15}{3:<15}{4:<80}".format(parms[i],value[i],uncer[i],units[i],notes[i]))
+
+
+
+    #return uncertainty values if asked
+    return unc_val
+
+
+
 def solve_sing_decomp(phi,theta):
     """
     Returns singular decomposition matrix solutions to use when computing multi-spacecraft solutions to Vgse, Wper/par, and Np
