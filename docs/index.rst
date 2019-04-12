@@ -239,7 +239,7 @@ Note this will take some time because the program needs to calculate new values 
     covar = mff.cal_covar_nm(nm_human.final_simplex,mff.gennorm_2d_reconstruct,(fc_test,dis_vdf_human,True),return_all=False)
 
 
-Now you may convert the covariance matrix into a uncertainty for each parameter.
+Now you may convert the covariance matrix into an uncertainty for each parameter.
 
 .. code-block:: python
 
