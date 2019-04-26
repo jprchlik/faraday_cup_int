@@ -6,6 +6,40 @@ from scipy.interpolate import interp1d
 import make_discrete_vdf as mdv
 
 
+def calc_bimax_free_energy(fcs,npar=6):
+    """
+    Calculates the free energy of the bi-Maxwellian fit 
+
+    Parameters
+    ----------
+    fcs: dictionary
+        A dictionary containing information on all the Faraday cup measures in Wind. This dictionary
+        has the same format as create_grid_vals_multi_fc in the multi_fc_functions.py module. 
+    npar: int, optional
+        Number of parameters in the fit. Bi-maxellian is 6 parameters (Default = 6).
+
+    Returns
+    -------
+    f_eng: float
+        The reduced Chi^2 or Free Energy 
+    """
+
+    #Init total X^2 variable
+    total_x2 = 0.
+    #Total number of measurements
+    total_ms = 0
+    for key in fcs.keys():
+        #Calculate X^2 per measurement per faraday cup
+        x2 = (fcs[key]['rea_cur']-fcs[key]['init_guess'])**2/fcs[key]['unc']**2
+        #Get total X^2 
+        total_x2 += np.sum(x2)
+        total_ms += x2.size
+
+    #Get Reduced Chi^2 or Free Energy
+    f_eng = total_x2/(total_ms-npar)
+
+    return f_eng
+
 
 def convert_e_to_kms(eng):
     """
