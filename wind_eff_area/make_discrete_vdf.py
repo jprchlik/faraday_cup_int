@@ -674,7 +674,7 @@ def convert_gse_fc(gse_cor,phi_ang,theta_ang):
     Parameters
     ----------
     gse_cor: np.array
-        X,Y, and X GSE coordinates to convert to  faraday cup coordiantes
+        X, Y, and Z GSE coordinates to convert to  faraday cup coordiantes
     
     phi_ang: float or np.array
         Phi angle between GSE and FC (radians)
